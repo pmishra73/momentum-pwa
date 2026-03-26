@@ -17,6 +17,29 @@ const PERIOD_LABELS = { weekly:"Weekly",fortnightly:"Fortnightly",monthly:"Month
 const ADMIN_EMAILS  = ["mishraprasant73@gmail.com"];
 const isAdmin       = email => ADMIN_EMAILS.includes((email||"").toLowerCase());
 
+// ─── THEMES ───────────────────────────────────────────────────────────────────
+const THEMES = {
+  light:    {label:"Light",      emoji:"☀️",  bg:"#faf7f2",card:"#ffffff",border:"#ede8e0",sand:"#e8d9c4",ink:"#3d3530",muted:"#9e8e80",accent:"#c4622d",accentLight:"#f5ede0"},
+  dark:     {label:"Dark",       emoji:"🌙",  bg:"#141414",card:"#1e1e1e",border:"#2a2a2a",sand:"#333333",ink:"#f0ebe5",muted:"#888080",accent:"#e07a5f",accentLight:"#2a1814"},
+  blue:     {label:"Light Blue", emoji:"🫧",  bg:"#f0f5ff",card:"#ffffff",border:"#d5e0f5",sand:"#c5d3f0",ink:"#1a2a4a",muted:"#5a6a8a",accent:"#3b6fd4",accentLight:"#e5ecff"},
+  forest:   {label:"Forest",     emoji:"🌿",  bg:"#f0f7f2",card:"#ffffff",border:"#d0e5d0",sand:"#b5d5b8",ink:"#1a3020",muted:"#5a7a5a",accent:"#2d7a4a",accentLight:"#e0f5e8"},
+  lavender: {label:"Lavender",   emoji:"💜",  bg:"#f5f0ff",card:"#ffffff",border:"#ddd0f5",sand:"#c8b8ee",ink:"#2a1a4a",muted:"#7a6a9a",accent:"#7c4fd4",accentLight:"#ede5ff"},
+  sunset:   {label:"Sunset",     emoji:"🌅",  bg:"#fff5f0",card:"#ffffff",border:"#f5d5c8",sand:"#f0c0a8",ink:"#3a1a14",muted:"#8a5a50",accent:"#d4504a",accentLight:"#ffe8e5"},
+};
+function applyTheme(name) {
+  const t=THEMES[name]||THEMES.light;
+  const s=document.documentElement.style;
+  s.setProperty('--bg',          t.bg);
+  s.setProperty('--card',        t.card);
+  s.setProperty('--border',      t.border);
+  s.setProperty('--sand',        t.sand);
+  s.setProperty('--ink',         t.ink);
+  s.setProperty('--muted',       t.muted);
+  s.setProperty('--accent',      t.accent);
+  s.setProperty('--accent-light',t.accentLight);
+}
+applyTheme(localStorage.getItem('mo:theme')||'light');
+
 // ─── STORAGE LAYER ────────────────────────────────────────────────────────────
 const idb = (() => {
   let db = null;
@@ -111,7 +134,7 @@ const Ring = ({pct,color,size=44}) => {
   return React.createElement('svg',{width:size,height:size,style:{flexShrink:0}},
     React.createElement('circle',{cx:size/2,cy:size/2,r,fill:"none",stroke:"#f0ebe3",strokeWidth:5}),
     React.createElement('circle',{cx:size/2,cy:size/2,r,fill:"none",stroke:color,strokeWidth:5,strokeDasharray:`${dash} ${circ}`,strokeLinecap:"round",transform:`rotate(-90 ${size/2} ${size/2})`}),
-    React.createElement('text',{x:size/2,y:size/2+4,textAnchor:"middle",fontSize:"10",fill:"#3d3530",fontFamily:"'Lora',serif",fontWeight:"600"},`${pct}%`)
+    React.createElement('text',{x:size/2,y:size/2+4,textAnchor:"middle",fontSize:"10",fill:"var(--ink)",fontFamily:"'Lora',serif",fontWeight:"600"},`${pct}%`)
   );
 };
 
@@ -136,12 +159,12 @@ function AdBanner({onDismiss}) {
 }
 function AdInline() {
   const ad=AD_COPY[2];
-  return React.createElement('div',{style:{background:"white",border:"1px dashed #e8d9c4",borderRadius:10,padding:"9px 13px",margin:"6px 0",display:"flex",alignItems:"center",gap:10}},
+  return React.createElement('div',{style:{background:"var(--card)",border:"1px dashed #e8d9c4",borderRadius:10,padding:"9px 13px",margin:"6px 0",display:"flex",alignItems:"center",gap:10}},
     React.createElement('span',{style:{fontSize:14}},"💡"),
     React.createElement('div',{style:{flex:1,fontSize:12,color:"var(--ink)"}},
       React.createElement('span',{style:{color:"var(--muted)",fontSize:10}},"Ad · "),
       ad.headline," — ",
-      React.createElement('span',{style:{color:"#c4622d",fontWeight:600}},ad.cta)
+      React.createElement('span',{style:{color:"var(--accent)",fontWeight:600}},ad.cta)
     )
   );
 }
@@ -152,7 +175,7 @@ function ModalWrap({children,onClose}) {
     style:{position:"fixed",inset:0,background:"rgba(61,53,48,.42)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:200,backdropFilter:"blur(3px)"},
     onClick:e=>e.target===e.currentTarget&&onClose()
   },
-    React.createElement('div',{style:{background:"white",borderRadius:"20px 20px 0 0",width:"100%",maxHeight:"90vh",overflowY:"auto",paddingBottom:"calc(16px + env(safe-area-inset-bottom))"}},
+    React.createElement('div',{style:{background:"var(--card)",borderRadius:"20px 20px 0 0",width:"100%",maxHeight:"90vh",overflowY:"auto",paddingBottom:"calc(16px + env(safe-area-inset-bottom))"}},
       children
     )
   );
@@ -165,11 +188,11 @@ function NoteModal({habitId,date,habitName,existing,onClose,onSave}) {
       React.createElement('div',{style:{width:36,height:4,background:"#e8d9c4",borderRadius:2,margin:"0 auto 16px"}}),
       React.createElement('div',{style:{fontFamily:"'Lora',serif",fontSize:17,fontWeight:700,marginBottom:2}},"Daily Note"),
       React.createElement('div',{style:{fontSize:12,color:"var(--muted)",marginBottom:14}},`${habitName} · ${date}`),
-      React.createElement('textarea',{style:{width:"100%",padding:"11px 14px",border:"1.5px solid #e8d9c4",borderRadius:12,fontSize:14,outline:"none",background:"#faf7f2",resize:"none",lineHeight:1.6,minHeight:90,fontFamily:"'DM Sans',sans-serif"},placeholder:"How did it go? Any notes…",value:note,onChange:e=>setNote(e.target.value)}),
+      React.createElement('textarea',{style:{width:"100%",padding:"11px 14px",border:"1.5px solid #e8d9c4",borderRadius:12,fontSize:14,outline:"none",background:"var(--bg)",resize:"none",lineHeight:1.6,minHeight:90,fontFamily:"'DM Sans',sans-serif"},placeholder:"How did it go? Any notes…",value:note,onChange:e=>setNote(e.target.value)}),
       React.createElement('div',{style:{display:"flex",gap:8,marginTop:12}},
         existing&&React.createElement('button',{onClick:()=>onSave(""),style:{padding:"11px 16px",borderRadius:12,background:"#fdf0ed",color:"#c0392b",fontSize:13,fontWeight:500,border:"none",cursor:"pointer"}},"Clear"),
-        React.createElement('button',{onClick:onClose,style:{flex:1,padding:"11px",borderRadius:12,background:"#f5ede0",fontSize:14,fontWeight:500,border:"none",cursor:"pointer"}},"Cancel"),
-        React.createElement('button',{onClick:()=>onSave(note),style:{flex:1,padding:"11px",borderRadius:12,background:"#3d3530",color:"white",fontSize:14,fontWeight:700,border:"none",cursor:"pointer"}},"Save")
+        React.createElement('button',{onClick:onClose,style:{flex:1,padding:"11px",borderRadius:12,background:"var(--accent-light)",fontSize:14,fontWeight:500,border:"none",cursor:"pointer"}},"Cancel"),
+        React.createElement('button',{onClick:()=>onSave(note),style:{flex:1,padding:"11px",borderRadius:12,background:"var(--ink)",color:"white",fontSize:14,fontWeight:700,border:"none",cursor:"pointer"}},"Save")
       )
     )
   );
@@ -206,7 +229,7 @@ function HabitModal({existing,onClose,onSave}) {
       React.createElement('div',{style:{width:36,height:4,background:"#e8d9c4",borderRadius:2,margin:"0 auto 16px"}}),
       React.createElement('div',{style:{fontFamily:"'Lora',serif",fontSize:19,fontWeight:700,marginBottom:16}},existing?"Edit Habit":"New Habit"),
       React.createElement(ModalRow,{label:"Name"},
-        React.createElement('input',{style:{width:"100%",padding:"11px 14px",border:"1.5px solid #e8d9c4",borderRadius:12,fontSize:14,outline:"none",background:"#faf7f2",fontFamily:"inherit"},placeholder:"e.g. Morning run…",value:name,onChange:e=>setName(e.target.value)})
+        React.createElement('input',{style:{width:"100%",padding:"11px 14px",border:"1.5px solid #e8d9c4",borderRadius:12,fontSize:14,outline:"none",background:"var(--bg)",fontFamily:"inherit"},placeholder:"e.g. Morning run…",value:name,onChange:e=>setName(e.target.value)})
       ),
       React.createElement(ModalRow,{label:"Category"},
         React.createElement(ModalPills,{items:CATEGORIES,active:cat,onPick:setCat,colorFn:c=>CAT_COLORS[c]})
@@ -221,11 +244,11 @@ function HabitModal({existing,onClose,onSave}) {
         React.createElement('div',{style:{display:"flex",gap:6,marginBottom:8}},
           ["Indefinitely","Until a date"].map((l,i)=>React.createElement('button',{key:l,onClick:()=>setHasEnd(i===1),style:{padding:"7px 13px",borderRadius:20,fontSize:13,border:"1.5px solid var(--sand)",background:hasEnd===(i===1)?"var(--ink)":"white",color:hasEnd===(i===1)?"white":"var(--ink)",fontFamily:"inherit",cursor:"pointer"}},l))
         ),
-        hasEnd&&React.createElement('input',{type:"date",style:{width:"100%",padding:"11px 14px",border:"1.5px solid #e8d9c4",borderRadius:12,fontSize:14,outline:"none",background:"#faf7f2",fontFamily:"inherit"},value:endDate,min:todayStr(),onChange:e=>setEnd(e.target.value)})
+        hasEnd&&React.createElement('input',{type:"date",style:{width:"100%",padding:"11px 14px",border:"1.5px solid #e8d9c4",borderRadius:12,fontSize:14,outline:"none",background:"var(--bg)",fontFamily:"inherit"},value:endDate,min:todayStr(),onChange:e=>setEnd(e.target.value)})
       ),
       React.createElement('div',{style:{display:"flex",gap:8,marginTop:4,paddingBottom:8}},
-        React.createElement('button',{onClick:onClose,style:{flex:1,padding:"13px",borderRadius:12,background:"#f5ede0",fontSize:14,fontWeight:500,border:"none",cursor:"pointer"}},"Cancel"),
-        React.createElement('button',{onClick:save,style:{flex:2,padding:"13px",borderRadius:12,background:"#c4622d",color:"white",fontSize:14,fontWeight:700,border:"none",cursor:"pointer",opacity:name.trim()?1:.45}},existing?"Save Changes":"Add Habit")
+        React.createElement('button',{onClick:onClose,style:{flex:1,padding:"13px",borderRadius:12,background:"var(--accent-light)",fontSize:14,fontWeight:500,border:"none",cursor:"pointer"}},"Cancel"),
+        React.createElement('button',{onClick:save,style:{flex:2,padding:"13px",borderRadius:12,background:"var(--accent)",color:"white",fontSize:14,fontWeight:700,border:"none",cursor:"pointer",opacity:name.trim()?1:.45}},existing?"Save Changes":"Add Habit")
       )
     )
   );
@@ -239,14 +262,14 @@ function InstallBanner({onInstall,onDismiss}) {
       React.createElement('div',{style:{fontSize:13,fontWeight:700,color:"var(--ink)"}},"Install Momentum"),
       React.createElement('div',{style:{fontSize:11,color:"var(--muted)"}},"Add to home screen for the best experience")
     ),
-    React.createElement('button',{onClick:onInstall,style:{padding:"8px 14px",borderRadius:10,background:"#c4622d",color:"white",fontSize:12,fontWeight:700,border:"none",cursor:"pointer"}},"Install"),
+    React.createElement('button',{onClick:onInstall,style:{padding:"8px 14px",borderRadius:10,background:"var(--accent)",color:"white",fontSize:12,fontWeight:700,border:"none",cursor:"pointer"}},"Install"),
     React.createElement('button',{onClick:onDismiss,style:{fontSize:16,color:"var(--muted)",background:"none",border:"none",cursor:"pointer",lineHeight:1}},"×")
   );
 }
 
 // ─── OFFLINE BANNER ───────────────────────────────────────────────────────────
 function OfflineBanner() {
-  return React.createElement('div',{style:{background:"#3d3530",color:"white",textAlign:"center",padding:"8px 16px",fontSize:12,fontWeight:500,display:"flex",alignItems:"center",justifyContent:"center",gap:8}},
+  return React.createElement('div',{style:{background:"var(--ink)",color:"white",textAlign:"center",padding:"8px 16px",fontSize:12,fontWeight:500,display:"flex",alignItems:"center",justifyContent:"center",gap:8}},
     React.createElement('span',null,"📡"),
     "You're offline — data saves locally until reconnected"
   );
@@ -256,7 +279,7 @@ function OfflineBanner() {
 function UpdateBanner({onUpdate}) {
   return React.createElement('div',{style:{background:"#81b29a",color:"white",textAlign:"center",padding:"8px 16px",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",gap:10}},
     "✨ New version available!",
-    React.createElement('button',{onClick:onUpdate,style:{background:"white",color:"#3a8c5c",padding:"3px 12px",borderRadius:8,fontSize:11,fontWeight:700,border:"none",cursor:"pointer"}},"Update")
+    React.createElement('button',{onClick:onUpdate,style:{background:"var(--card)",color:"#3a8c5c",padding:"3px 12px",borderRadius:8,fontSize:11,fontWeight:700,border:"none",cursor:"pointer"}},"Update")
   );
 }
 
@@ -295,7 +318,7 @@ function NotificationSettings({onClose}) {
       React.createElement('div',{style:{fontFamily:"'Lora',serif",fontSize:19,fontWeight:700,marginBottom:4}},"Notifications"),
       React.createElement('div',{style:{fontSize:13,color:"var(--muted)",marginBottom:20}},"Get daily reminders to keep your streak alive."),
 
-      React.createElement('div',{style:{background:"#faf7f2",borderRadius:12,padding:"14px",marginBottom:16}},
+      React.createElement('div',{style:{background:"var(--bg)",borderRadius:12,padding:"14px",marginBottom:16}},
         React.createElement('div',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",marginBottom:4}},"Status"),
         React.createElement('div',{style:{fontSize:14,fontWeight:600}},statusLabel)
       ),
@@ -303,7 +326,7 @@ function NotificationSettings({onClose}) {
       React.createElement('div',{style:{marginBottom:16}},
         React.createElement('div',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",marginBottom:8}},"Daily Reminder Time"),
         React.createElement('div',{style:{display:"flex",alignItems:"center",gap:10}},
-          React.createElement('input',{type:"range",min:5,max:22,value:reminderHour,onChange:e=>setHour(parseInt(e.target.value)),style:{flex:1,accentColor:"#c4622d"}}),
+          React.createElement('input',{type:"range",min:5,max:22,value:reminderHour,onChange:e=>setHour(parseInt(e.target.value)),style:{flex:1,accentColor:"var(--accent)"}}),
           React.createElement('div',{style:{fontSize:15,fontWeight:700,minWidth:50,color:"var(--ink)"}},
             `${reminderHour>12?reminderHour-12:reminderHour||12}:00 ${reminderHour>=12?"PM":"AM"}`
           )
@@ -315,9 +338,9 @@ function NotificationSettings({onClose}) {
         status==="subscribed"
           ? React.createElement('button',{onClick:disable,style:{flex:1,padding:"13px",borderRadius:12,background:"#fdf0ed",color:"#c0392b",fontSize:14,fontWeight:600,border:"none",cursor:"pointer"}},"Disable Notifications")
           : status!=="denied"&&status!=="unsupported"
-            ? React.createElement('button',{onClick:enable,style:{flex:1,padding:"13px",borderRadius:12,background:"#c4622d",color:"white",fontSize:14,fontWeight:700,border:"none",cursor:"pointer"}},"Enable Notifications")
+            ? React.createElement('button',{onClick:enable,style:{flex:1,padding:"13px",borderRadius:12,background:"var(--accent)",color:"white",fontSize:14,fontWeight:700,border:"none",cursor:"pointer"}},"Enable Notifications")
             : React.createElement('div',{style:{flex:1,padding:"13px",borderRadius:12,background:"#f5f0e8",color:"var(--muted)",fontSize:13,textAlign:"center"}},"Open browser settings to enable"),
-        React.createElement('button',{onClick:onClose,style:{flex:1,padding:"13px",borderRadius:12,background:"#f5ede0",fontSize:14,fontWeight:500,border:"none",cursor:"pointer"}},"Done")
+        React.createElement('button',{onClick:onClose,style:{flex:1,padding:"13px",borderRadius:12,background:"var(--accent-light)",fontSize:14,fontWeight:500,border:"none",cursor:"pointer"}},"Done")
       )
     )
   );
@@ -380,12 +403,12 @@ function AuthPage({mode:im,onAuth,onBack}) {
     }
     setLoading(false);
   };
-  const inp=extra=>({style:{width:"100%",padding:"13px 15px",border:"1.5px solid #e8d9c4",borderRadius:14,fontSize:15,outline:"none",background:"#faf7f2",fontFamily:"'DM Sans',sans-serif",marginTop:5},...extra});
-  return React.createElement('div',{style:{minHeight:"100%",background:"#faf7f2",display:"flex",flexDirection:"column",padding:"0 24px 24px",paddingBottom:"calc(24px + env(safe-area-inset-bottom))"}},
+  const inp=extra=>({style:{width:"100%",padding:"13px 15px",border:"1.5px solid #e8d9c4",borderRadius:14,fontSize:15,outline:"none",background:"var(--bg)",fontFamily:"'DM Sans',sans-serif",marginTop:5},...extra});
+  return React.createElement('div',{style:{minHeight:"100%",background:"var(--bg)",display:"flex",flexDirection:"column",padding:"0 24px 24px",paddingBottom:"calc(24px + env(safe-area-inset-bottom))"}},
     React.createElement('div',{style:{paddingTop:"calc(16px + env(safe-area-inset-top))"}},
       React.createElement('button',{onClick:onBack,style:{fontSize:13,color:"var(--muted)",marginBottom:24,background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:4}},"← Back"),
       React.createElement('div',{style:{display:"flex",alignItems:"center",gap:8,marginBottom:28}},
-        React.createElement('span',{style:{fontSize:22,color:"#c4622d",fontFamily:"'Lora',serif",fontWeight:700}},"◆"),
+        React.createElement('span',{style:{fontSize:22,color:"var(--accent)",fontFamily:"'Lora',serif",fontWeight:700}},"◆"),
         React.createElement('span',{style:{fontFamily:"'Lora',serif",fontWeight:700,fontSize:19}},"Momentum")
       ),
       React.createElement('h2',{style:{fontFamily:"'Lora',serif",fontSize:26,fontWeight:700,marginBottom:6}},mode==="login"?"Welcome back":"Create account"),
@@ -403,10 +426,10 @@ function AuthPage({mode:im,onAuth,onBack}) {
         React.createElement('input',inp({type:"password",placeholder:"Min 6 characters",value:pw,onChange:e=>setPw(e.target.value),onKeyDown:e=>e.key==="Enter"&&handle()}))
       ),
       err&&React.createElement('div',{style:{background:"#fdf0ed",color:"#c0392b",padding:"11px 14px",borderRadius:10,fontSize:13,marginBottom:16}},err),
-      React.createElement('button',{onClick:handle,disabled:loading,style:{width:"100%",padding:"15px",borderRadius:14,background:"#c4622d",color:"white",fontSize:16,fontWeight:700,border:"none",cursor:"pointer",opacity:loading?.7:1}},loading?"Please wait…":mode==="login"?"Log in →":"Create Account →"),
+      React.createElement('button',{onClick:handle,disabled:loading,style:{width:"100%",padding:"15px",borderRadius:14,background:"var(--accent)",color:"white",fontSize:16,fontWeight:700,border:"none",cursor:"pointer",opacity:loading?.7:1}},loading?"Please wait…":mode==="login"?"Log in →":"Create Account →"),
       React.createElement('div',{style:{textAlign:"center",marginTop:20,fontSize:14,color:"var(--muted)"}},
         mode==="login"?"Don't have an account? ":"Already have an account? ",
-        React.createElement('button',{onClick:()=>{setMode(m=>m==="login"?"signup":"login");setErr("");},style:{color:"#c4622d",fontWeight:600,textDecoration:"underline",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit"}},mode==="login"?"Sign up":"Log in")
+        React.createElement('button',{onClick:()=>{setMode(m=>m==="login"?"signup":"login");setErr("");},style:{color:"var(--accent)",fontWeight:600,textDecoration:"underline",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit"}},mode==="login"?"Sign up":"Log in")
       )
     )
   );
@@ -431,16 +454,16 @@ function OnboardingPage({user,onComplete}) {
   const PLANS=[
     {key:"free",emoji:"🌱",label:"Free",sub:"Ads · data shared to fund the product",color:"#81b29a"},
     {key:"local",emoji:"💾",label:"Local Pro",sub:"On this device · no ads · offline",color:"#c4a882"},
-    {key:"cloud",emoji:"☁️",label:"Cloud Pro",sub:"Private cloud · no ads · multi-device",color:"#c4622d"},
+    {key:"cloud",emoji:"☁️",label:"Cloud Pro",sub:"Private cloud · no ads · multi-device",color:"var(--accent)"},
   ];
-  return React.createElement('div',{style:{minHeight:"100%",background:"#faf7f2",padding:"calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom))"}},
+  return React.createElement('div',{style:{minHeight:"100%",background:"var(--bg)",padding:"calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom))"}},
     React.createElement('div',{style:{display:"flex",alignItems:"center",gap:8,marginBottom:24}},
-      React.createElement('span',{style:{fontSize:20,color:"#c4622d",fontFamily:"'Lora',serif",fontWeight:700}},"◆"),
+      React.createElement('span',{style:{fontSize:20,color:"var(--accent)",fontFamily:"'Lora',serif",fontWeight:700}},"◆"),
       React.createElement('span',{style:{fontFamily:"'Lora',serif",fontWeight:700,fontSize:18}},"Momentum")
     ),
     React.createElement('h2',{style:{fontFamily:"'Lora',serif",fontSize:22,fontWeight:700,marginBottom:4}},`Welcome, ${user.name}! 👋`),
     React.createElement('p',{style:{fontSize:13,color:"var(--muted)",marginBottom:20}},"Choose how your data is stored. You can change this anytime."),
-    React.createElement('div',{style:{display:"inline-flex",background:"#f5ede0",border:"1px solid #e8d9c4",borderRadius:30,padding:3,gap:2,marginBottom:16}},
+    React.createElement('div',{style:{display:"inline-flex",background:"var(--accent-light)",border:"1px solid #e8d9c4",borderRadius:30,padding:3,gap:2,marginBottom:16}},
       ["monthly","yearly"].map(b=>React.createElement('button',{key:b,onClick:()=>setBilling(b),style:{padding:"7px 16px",borderRadius:26,fontSize:12,fontWeight:600,background:billing===b?"var(--ink)":"transparent",color:billing===b?"white":"var(--muted)",border:"none",cursor:"pointer",fontFamily:"inherit"}},b.charAt(0).toUpperCase()+b.slice(1)))
     ),
     PLANS.map(p=>React.createElement('div',{key:p.key,onClick:()=>setPlan(p.key),style:{border:`2px solid ${plan===p.key?p.color:"#e8d9c4"}`,borderRadius:14,padding:"13px 15px",cursor:"pointer",background:plan===p.key?`${p.color}08`:"white",transition:"all .15s",display:"flex",alignItems:"center",gap:12,marginBottom:8}},
@@ -455,7 +478,7 @@ function OnboardingPage({user,onComplete}) {
       )
     )),
     plan==="free"&&React.createElement('div',{style:{background:"#fef9ee",border:"1px solid #f2cc8f",borderRadius:12,padding:"14px",margin:"12px 0"}},
-      React.createElement('div',{style:{fontSize:13,fontWeight:700,marginBottom:8,color:"#3d3530"}},"⚠️ Before you continue"),
+      React.createElement('div',{style:{fontSize:13,fontWeight:700,marginBottom:8,color:"var(--ink)"}},"⚠️ Before you continue"),
       React.createElement('label',{style:{display:"flex",gap:10,alignItems:"flex-start",fontSize:12,marginBottom:8,cursor:"pointer"}},
         React.createElement('input',{type:"checkbox",checked:dc,onChange:e=>setDc(e.target.checked),style:{marginTop:2,flexShrink:0}}),
         React.createElement('span',null,"I agree my habit data may be used for product improvement and targeted marketing.")
@@ -475,29 +498,29 @@ function LandingPage({onSignup,onLogin}) {
   const PLANS=[
     {key:"free",emoji:"🌱",name:"Free",price:"$0",sub:"Ad-supported",color:"#81b29a",features:["All habit features","Ads + data sharing","Server storage"]},
     {key:"local",emoji:"💾",name:"Local Pro",price:billing==="monthly"?"$3/mo":"$29/yr",sub:billing==="yearly"?"Save $7":"Most private",color:"#c4a882",features:["On-device storage","No ads ever","Offline support"]},
-    {key:"cloud",emoji:"☁️",name:"Cloud Pro",price:billing==="monthly"?"$4/mo":"$35/yr",sub:billing==="yearly"?"Save $13":"Most popular",color:"#c4622d",features:["Private cloud","No ads ever","Multi-device sync"],badge:true},
+    {key:"cloud",emoji:"☁️",name:"Cloud Pro",price:billing==="monthly"?"$4/mo":"$35/yr",sub:billing==="yearly"?"Save $13":"Most popular",color:"var(--accent)",features:["Private cloud","No ads ever","Multi-device sync"],badge:true},
   ];
-  return React.createElement('div',{style:{minHeight:"100%",background:"#faf7f2",overflowY:"auto",paddingBottom:"calc(24px + env(safe-area-inset-bottom))"}},
+  return React.createElement('div',{style:{minHeight:"100%",background:"var(--bg)",overflowY:"auto",paddingBottom:"calc(24px + env(safe-area-inset-bottom))"}},
     // Nav
-    React.createElement('div',{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"calc(14px + env(safe-area-inset-top)) 20px 14px",background:"white",borderBottom:"1px solid #ede8e0",position:"sticky",top:0,zIndex:10}},
+    React.createElement('div',{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"calc(14px + env(safe-area-inset-top)) 20px 14px",background:"var(--card)",borderBottom:"1px solid var(--border)",position:"sticky",top:0,zIndex:10}},
       React.createElement('div',{style:{display:"flex",alignItems:"center",gap:8}},
-        React.createElement('span',{style:{fontSize:18,color:"#c4622d",fontFamily:"'Lora',serif",fontWeight:700}},"◆"),
+        React.createElement('span',{style:{fontSize:18,color:"var(--accent)",fontFamily:"'Lora',serif",fontWeight:700}},"◆"),
         React.createElement('span',{style:{fontFamily:"'Lora',serif",fontWeight:700,fontSize:17}},"Momentum")
       ),
-      React.createElement('button',{onClick:onLogin,style:{padding:"8px 18px",borderRadius:10,border:"1.5px solid #e8d9c4",background:"white",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"Log in")
+      React.createElement('button',{onClick:onLogin,style:{padding:"8px 18px",borderRadius:10,border:"1.5px solid #e8d9c4",background:"var(--card)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"Log in")
     ),
     // Hero
     React.createElement('div',{style:{textAlign:"center",padding:"40px 24px 28px"}},
-      React.createElement('div',{style:{display:"inline-block",background:"#f5ede0",border:"1px solid #e8d9c4",borderRadius:20,padding:"4px 14px",fontSize:11,fontWeight:700,color:"#c4622d",marginBottom:16,textTransform:"uppercase",letterSpacing:".06em"}},"Daily Habit Tracker"),
-      React.createElement('h1',{style:{fontFamily:"'Lora',serif",fontSize:36,fontWeight:700,lineHeight:1.2,marginBottom:14,color:"#3d3530"}},
-        "Build habits that ",React.createElement('em',{style:{color:"#c4622d"}},"actually stick.")
+      React.createElement('div',{style:{display:"inline-block",background:"var(--accent-light)",border:"1px solid #e8d9c4",borderRadius:20,padding:"4px 14px",fontSize:11,fontWeight:700,color:"var(--accent)",marginBottom:16,textTransform:"uppercase",letterSpacing:".06em"}},"Daily Habit Tracker"),
+      React.createElement('h1',{style:{fontFamily:"'Lora',serif",fontSize:36,fontWeight:700,lineHeight:1.2,marginBottom:14,color:"var(--ink)"}},
+        "Build habits that ",React.createElement('em',{style:{color:"var(--accent)"}},"actually stick.")
       ),
       React.createElement('p',{style:{fontSize:15,color:"#9e8e80",lineHeight:1.65,marginBottom:28,maxWidth:320,margin:"0 auto 28px"}},"Track daily rituals, streaks, and progress — with full control over where your data lives."),
-      React.createElement('button',{onClick:onSignup,style:{width:"100%",maxWidth:320,padding:"16px",borderRadius:14,background:"#c4622d",color:"white",fontSize:16,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 20px rgba(196,98,45,.3)"}},"Start for free →"),
-      React.createElement('button',{onClick:onLogin,style:{width:"100%",maxWidth:320,padding:"14px",borderRadius:14,border:"1.5px solid #e8d9c4",background:"white",fontSize:15,fontWeight:500,cursor:"pointer",fontFamily:"inherit",marginTop:10,color:"#3d3530"}},"I have an account")
+      React.createElement('button',{onClick:onSignup,style:{width:"100%",maxWidth:320,padding:"16px",borderRadius:14,background:"var(--accent)",color:"white",fontSize:16,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 20px rgba(196,98,45,.3)"}},"Start for free →"),
+      React.createElement('button',{onClick:onLogin,style:{width:"100%",maxWidth:320,padding:"14px",borderRadius:14,border:"1.5px solid #e8d9c4",background:"var(--card)",fontSize:15,fontWeight:500,cursor:"pointer",fontFamily:"inherit",marginTop:10,color:"var(--ink)"}},"I have an account")
     ),
     // Features
-    React.createElement('div',{style:{background:"#f5ede0",borderTop:"1px solid #e8d9c4",borderBottom:"1px solid #e8d9c4",padding:"16px 24px"}},
+    React.createElement('div',{style:{background:"var(--accent-light)",borderTop:"1px solid #e8d9c4",borderBottom:"1px solid #e8d9c4",padding:"16px 24px"}},
       React.createElement('div',{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
         [["🔥","Streak Tracking"],["📊","6 Report Periods"],["✎","Daily Notes"],["📁","Export CSV & PDF"],["☰","Drag to Reorder"],["🔒","Your Data, Your Rules"]].map(([e,t])=>
           React.createElement('div',{key:t,style:{display:"flex",alignItems:"center",gap:7,fontSize:13,fontWeight:500}},
@@ -511,12 +534,12 @@ function LandingPage({onSignup,onLogin}) {
       React.createElement('h2',{style:{fontFamily:"'Lora',serif",fontSize:24,fontWeight:700,textAlign:"center",marginBottom:6}},"Simple pricing"),
       React.createElement('p',{style:{fontSize:13,color:"#9e8e80",textAlign:"center",marginBottom:20}},"No hidden fees. Cancel anytime."),
       React.createElement('div',{style:{display:"flex",justifyContent:"center",marginBottom:20}},
-        React.createElement('div',{style:{display:"inline-flex",background:"#f5ede0",border:"1px solid #e8d9c4",borderRadius:30,padding:3,gap:2}},
+        React.createElement('div',{style:{display:"inline-flex",background:"var(--accent-light)",border:"1px solid #e8d9c4",borderRadius:30,padding:3,gap:2}},
           ["monthly","yearly"].map(b=>React.createElement('button',{key:b,onClick:()=>setBilling(b),style:{padding:"7px 16px",borderRadius:26,fontSize:12,fontWeight:600,background:billing===b?"#3d3530":"transparent",color:billing===b?"white":"#9e8e80",border:"none",cursor:"pointer",fontFamily:"inherit"}},b.charAt(0).toUpperCase()+b.slice(1)))
         )
       ),
-      PLANS.map(p=>React.createElement('div',{key:p.key,style:{background:"white",borderRadius:16,padding:"20px",marginBottom:12,border:`2px solid ${p.badge?"#c4622d":"#e8d9c4"}`,position:"relative",boxShadow:p.badge?"0 4px 20px rgba(196,98,45,.10)":"none"}},
-        p.badge&&React.createElement('div',{style:{position:"absolute",top:-11,right:16,background:"#c4622d",color:"white",fontSize:10,fontWeight:700,padding:"3px 12px",borderRadius:20,textTransform:"uppercase"}},"Popular"),
+      PLANS.map(p=>React.createElement('div',{key:p.key,style:{background:"var(--card)",borderRadius:16,padding:"20px",marginBottom:12,border:`2px solid ${p.badge?"var(--accent)":"var(--sand)"}`,position:"relative",boxShadow:p.badge?"0 4px 20px rgba(196,98,45,.10)":"none"}},
+        p.badge&&React.createElement('div',{style:{position:"absolute",top:-11,right:16,background:"var(--accent)",color:"white",fontSize:10,fontWeight:700,padding:"3px 12px",borderRadius:20,textTransform:"uppercase"}},"Popular"),
         React.createElement('div',{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}},
           React.createElement('div',null,
             React.createElement('div',{style:{fontSize:22,marginBottom:4}},p.emoji),
@@ -528,7 +551,7 @@ function LandingPage({onSignup,onLogin}) {
         p.features.map(f=>React.createElement('div',{key:f,style:{display:"flex",alignItems:"center",gap:7,fontSize:13,marginBottom:5}},
           React.createElement('span',{style:{color:p.color,fontWeight:700}},"✓"),f
         )),
-        React.createElement('button',{onClick:onSignup,style:{width:"100%",padding:"12px",borderRadius:12,marginTop:14,background:p.badge?"#c4622d":"#f5ede0",color:p.badge?"white":"#3d3530",fontSize:14,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit"}},"Get started")
+        React.createElement('button',{onClick:onSignup,style:{width:"100%",padding:"12px",borderRadius:12,marginTop:14,background:p.badge?"var(--accent)":"var(--accent-light)",color:p.badge?"white":"var(--ink)",fontSize:14,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit"}},"Get started")
       ))
     )
   );
@@ -544,8 +567,8 @@ function AdminPanel({onClose}) {
   const PC={free:"#81b29a",local:"#c4a882",cloud:"#c4622d",none:"#b5b5a9"};
   const PE={free:"🌱",local:"💾",cloud:"☁️",none:"—"};
 
-  return React.createElement('div',{style:{background:"#faf7f2",minHeight:"100%",paddingBottom:"calc(24px + env(safe-area-inset-bottom))"}},
-    React.createElement('div',{style:{display:"flex",alignItems:"center",gap:12,padding:"calc(16px + env(safe-area-inset-top)) 18px 16px",background:"white",borderBottom:"1px solid #ede8e0",position:"sticky",top:0,zIndex:10}},
+  return React.createElement('div',{style:{background:"var(--bg)",minHeight:"100%",paddingBottom:"calc(24px + env(safe-area-inset-bottom))"}},
+    React.createElement('div',{style:{display:"flex",alignItems:"center",gap:12,padding:"calc(16px + env(safe-area-inset-top)) 18px 16px",background:"var(--card)",borderBottom:"1px solid var(--border)",position:"sticky",top:0,zIndex:10}},
       React.createElement('button',{onClick:onClose,style:{fontSize:22,color:"var(--muted)",background:"none",border:"none",cursor:"pointer",lineHeight:1,marginRight:4}},"←"),
       React.createElement('div',{style:{flex:1}},
         React.createElement('div',{style:{fontFamily:"'Lora',serif",fontWeight:700,fontSize:17}},"Admin Panel"),
@@ -556,7 +579,7 @@ function AdminPanel({onClose}) {
     React.createElement('div',{style:{padding:"16px"}},
       React.createElement('div',{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}},
         [["cloud","☁️ Cloud"],["local","💾 Local"],["free","🌱 Free"]].map(([p,l])=>
-          React.createElement('div',{key:p,style:{background:"white",borderRadius:12,padding:"12px",textAlign:"center",border:`1.5px solid ${PC[p]}33`}},
+          React.createElement('div',{key:p,style:{background:"var(--card)",borderRadius:12,padding:"12px",textAlign:"center",border:`1.5px solid ${PC[p]}33`}},
             React.createElement('div',{style:{fontSize:22,fontWeight:700,color:PC[p]}},(counts[p]||0)),
             React.createElement('div',{style:{fontSize:11,color:"var(--muted)",marginTop:2}},l)
           )
@@ -564,13 +587,13 @@ function AdminPanel({onClose}) {
       ),
       list.length===0
         ? React.createElement('div',{style:{textAlign:"center",padding:"32px",color:"var(--muted)",fontSize:14}},"No users yet.")
-        : list.map(u=>React.createElement('div',{key:u.uid,style:{background:"white",borderRadius:14,padding:"14px 16px",marginBottom:10,border:"1px solid #ede8e0"}},
+        : list.map(u=>React.createElement('div',{key:u.uid,style:{background:"var(--card)",borderRadius:14,padding:"14px 16px",marginBottom:10,border:"1px solid var(--border)"}},
             React.createElement('div',{style:{display:"flex",alignItems:"center",gap:10}},
               React.createElement('div',{style:{width:36,height:36,borderRadius:"50%",background:`${PC[u.plan||"none"]}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}},PE[u.plan||"none"]),
               React.createElement('div',{style:{flex:1,minWidth:0}},
                 React.createElement('div',{style:{fontWeight:600,fontSize:14,display:"flex",alignItems:"center",gap:6}},
                   u.name||"—",
-                  u.role==="admin"&&React.createElement('span',{style:{fontSize:10,background:"#c4622d",color:"white",borderRadius:20,padding:"1px 7px",fontWeight:700}},"ADMIN")
+                  u.role==="admin"&&React.createElement('span',{style:{fontSize:10,background:"var(--accent)",color:"white",borderRadius:20,padding:"1px 7px",fontWeight:700}},"ADMIN")
                 ),
                 React.createElement('div',{style:{fontSize:12,color:"var(--muted)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},u.email)
               ),
@@ -588,6 +611,8 @@ function AdminPanel({onClose}) {
 function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenAdmin}) {
   const [billing,setBilling]=useState(user.billing||"monthly");
   const [saved,setSaved]=useState(false);
+  const [curTheme,setCurTheme]=useState(localStorage.getItem('mo:theme')||'light');
+  const changeTheme=name=>{setCurTheme(name);applyTheme(name);localStorage.setItem('mo:theme',name);};
   const PC={free:"#81b29a",local:"#c4a882",cloud:"#c4622d"};
   const PE={free:"🌱",local:"💾",cloud:"☁️"};
   const switchPlan=async(p)=>{
@@ -597,13 +622,13 @@ function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenA
     onPlanChange({...user,plan:p,billing}); setSaved(true); setTimeout(()=>setSaved(false),2000);
   };
 
-  const Section=({title,children})=>React.createElement('div',{style:{background:"white",borderRadius:16,padding:"18px 18px",marginBottom:12}},
+  const Section=({title,children})=>React.createElement('div',{style:{background:"var(--card)",borderRadius:16,padding:"18px 18px",marginBottom:12}},
     React.createElement('div',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",marginBottom:12}},title),
     children
   );
 
-  return React.createElement('div',{style:{background:"#faf7f2",minHeight:"100%",overflowY:"auto",paddingBottom:"calc(24px + env(safe-area-inset-bottom))"}},
-    React.createElement('div',{style:{display:"flex",alignItems:"center",gap:12,padding:"calc(16px + env(safe-area-inset-top)) 18px 16px",background:"white",borderBottom:"1px solid #ede8e0",position:"sticky",top:0,zIndex:10}},
+  return React.createElement('div',{style:{background:"var(--bg)",minHeight:"100%",overflowY:"auto",paddingBottom:"calc(24px + env(safe-area-inset-bottom))"}},
+    React.createElement('div',{style:{display:"flex",alignItems:"center",gap:12,padding:"calc(16px + env(safe-area-inset-top)) 18px 16px",background:"var(--card)",borderBottom:"1px solid var(--border)",position:"sticky",top:0,zIndex:10}},
       React.createElement('button',{onClick:onClose,style:{fontSize:22,color:"var(--muted)",background:"none",border:"none",cursor:"pointer",lineHeight:1,marginRight:4}},"←"),
       React.createElement('div',{style:{flex:1}},
         React.createElement('div',{style:{fontFamily:"'Lora',serif",fontWeight:700,fontSize:17}},"Account"),
@@ -621,14 +646,22 @@ function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenA
         )
       ),
       React.createElement(Section,{title:"Notifications"},
-        React.createElement('button',{onClick:onNotifications,style:{width:"100%",padding:"11px",borderRadius:12,background:"#f5ede0",fontSize:14,fontWeight:600,border:"none",cursor:"pointer",textAlign:"left",fontFamily:"inherit",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+        React.createElement('button',{onClick:onNotifications,style:{width:"100%",padding:"11px",borderRadius:12,background:"var(--accent-light)",fontSize:14,fontWeight:600,border:"none",cursor:"pointer",textAlign:"left",fontFamily:"inherit",display:"flex",justifyContent:"space-between",alignItems:"center"}},
           React.createElement('span',null,"🔔 Manage Notifications"),
           React.createElement('span',{style:{color:"var(--muted)"}},"›")
         )
       ),
+      React.createElement(Section,{title:"Appearance"},
+        React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:8}},
+          Object.entries(THEMES).map(([k,t])=>React.createElement('button',{key:k,onClick:()=>changeTheme(k),style:{display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"10px 12px",borderRadius:14,border:`2px solid ${curTheme===k?t.accent:"transparent"}`,background:t.bg,cursor:"pointer",minWidth:66,transition:"all .15s",outline:"none"}},
+            React.createElement('div',{style:{fontSize:22}},t.emoji),
+            React.createElement('div',{style:{fontSize:10,fontWeight:600,color:t.ink,whiteSpace:"nowrap"}},t.label)
+          ))
+        )
+      ),
       React.createElement(Section,{title:"Change Plan"},
         React.createElement('div',{style:{display:"flex",gap:6,marginBottom:12}},
-          ["monthly","yearly"].map(b=>React.createElement('button',{key:b,onClick:()=>setBilling(b),style:{padding:"6px 14px",borderRadius:20,fontSize:12,fontWeight:600,background:billing===b?"var(--ink)":"#f5ede0",color:billing===b?"white":"var(--muted)",border:"none",cursor:"pointer",fontFamily:"inherit"}},b.charAt(0).toUpperCase()+b.slice(1)))
+          ["monthly","yearly"].map(b=>React.createElement('button',{key:b,onClick:()=>setBilling(b),style:{padding:"6px 14px",borderRadius:20,fontSize:12,fontWeight:600,background:billing===b?"var(--ink)":"var(--accent-light)",color:billing===b?"white":"var(--muted)",border:"none",cursor:"pointer",fontFamily:"inherit"}},b.charAt(0).toUpperCase()+b.slice(1)))
         ),
         [
           {key:"free",emoji:"🌱",label:"Free",price:"$0",sub:"Ads · data sharing"},
@@ -642,7 +675,7 @@ function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenA
           ),
           React.createElement('div',{style:{fontWeight:700,fontSize:13,color:PC[p.key]}},p.price),
           user.plan!==p.key
-            ? React.createElement('button',{onClick:()=>switchPlan(p.key),style:{padding:"5px 12px",borderRadius:8,background:"#f5ede0",border:"none",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"Switch")
+            ? React.createElement('button',{onClick:()=>switchPlan(p.key),style:{padding:"5px 12px",borderRadius:8,background:"var(--accent-light)",border:"none",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"Switch")
             : React.createElement('span',{style:{fontSize:11,color:PC[p.key],fontWeight:700}},"✓")
         )),
         saved&&React.createElement('div',{style:{fontSize:13,color:"#3a8c5c",fontWeight:600,marginTop:6}},"✓ Plan updated!")
@@ -655,7 +688,7 @@ function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenA
         )
       ),
       isAdmin(user.email)&&React.createElement(Section,{title:"Admin"},
-        React.createElement('button',{onClick:onOpenAdmin,style:{width:"100%",padding:"11px",borderRadius:12,background:"#f5ede0",fontSize:14,fontWeight:600,border:"none",cursor:"pointer",textAlign:"left",fontFamily:"inherit",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+        React.createElement('button',{onClick:onOpenAdmin,style:{width:"100%",padding:"11px",borderRadius:12,background:"var(--accent-light)",fontSize:14,fontWeight:600,border:"none",cursor:"pointer",textAlign:"left",fontFamily:"inherit",display:"flex",justifyContent:"space-between",alignItems:"center"}},
           React.createElement('span',null,"🛡️ Admin Panel"),
           React.createElement('span',{style:{color:"var(--muted)"}},"›")
         )
@@ -756,7 +789,7 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
 
   const PC={free:"#81b29a",local:"#c4a882",cloud:"#c4622d"};
 
-  if(!loaded) return React.createElement('div',{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#faf7f2",fontFamily:"'Lora',serif",color:"#9e8e80",fontSize:16}},"◆ Loading…");
+  if(!loaded) return React.createElement('div',{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"var(--bg)",fontFamily:"'Lora',serif",color:"#9e8e80",fontSize:16}},"◆ Loading…");
 
   // Bottom nav items
   const NAV=[
@@ -772,17 +805,17 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
     updateReady&&React.createElement(UpdateBanner,{onUpdate:()=>window.MomentumPWA?.applyUpdate()}),
 
     // Top header
-    React.createElement('div',{style:{background:"white",borderBottom:"1px solid #ede8e0",paddingTop:"env(safe-area-inset-top)",flexShrink:0}},
+    React.createElement('div',{style:{background:"var(--card)",borderBottom:"1px solid var(--border)",paddingTop:"env(safe-area-inset-top)",flexShrink:0}},
       React.createElement('div',{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",gap:8}},
         React.createElement('div',{style:{display:"flex",alignItems:"center",gap:7}},
-          React.createElement('span',{style:{fontSize:17,color:"#c4622d",fontFamily:"'Lora',serif",fontWeight:700}},"◆"),
+          React.createElement('span',{style:{fontSize:17,color:"var(--accent)",fontFamily:"'Lora',serif",fontWeight:700}},"◆"),
           React.createElement('span',{style:{fontFamily:"'Lora',serif",fontWeight:700,fontSize:16}},"Momentum"),
           saveInd&&React.createElement('span',{style:{display:"inline-block",width:6,height:6,borderRadius:"50%",background:"#81b29a",animation:"fd 1.4s forwards"}}),
           React.createElement('span',{style:{fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:8,background:PC[user.plan]+"22",color:PC[user.plan],border:`1px solid ${PC[user.plan]}44`}},PRICING[user.plan].label)
         ),
         React.createElement('div',{style:{display:"flex",gap:8,alignItems:"center"}},
-          React.createElement('button',{onClick:onOpenAccount,style:{width:30,height:30,borderRadius:"50%",background:"#f5ede0",border:"1.5px solid #e8d9c4",fontSize:12,fontWeight:700,color:"var(--ink)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}},user.name.charAt(0).toUpperCase()),
-          React.createElement('button',{onClick:()=>{setEditH(null);setShowAdd(true);},style:{padding:"7px 14px",borderRadius:9,background:"#c4622d",color:"white",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit"}},"+ Add")
+          React.createElement('button',{onClick:onOpenAccount,style:{width:30,height:30,borderRadius:"50%",background:"var(--accent-light)",border:"1.5px solid #e8d9c4",fontSize:12,fontWeight:700,color:"var(--ink)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}},user.name.charAt(0).toUpperCase()),
+          React.createElement('button',{onClick:()=>{setEditH(null);setShowAdd(true);},style:{padding:"7px 14px",borderRadius:9,background:"var(--accent)",color:"white",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit"}},"+ Add")
         )
       )
     ),
@@ -799,11 +832,11 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
 
         // Summary cards
         React.createElement('div',{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}},
-          [{label:"Today",value:`${doneT}/${todayH.length}`,sub:"done",accent:"#c4622d"},
+          [{label:"Today",value:`${doneT}/${todayH.length}`,sub:"done",accent:"var(--accent)"},
            {label:"Rate",value:todayH.length?`${Math.round(doneT/todayH.length*100)}%`:"—",sub:"today",accent:"#81b29a"},
            {label:"Streak",value:`${bestStr}d`,sub:"best 🔥",accent:"#f2cc8f"},
            {label:"Active",value:habits.filter(h=>!h.paused).length,sub:"habits",accent:"#a8c5da"},
-          ].map(c=>React.createElement('div',{key:c.label,style:{background:"white",borderRadius:12,padding:"12px 14px",boxShadow:"0 1px 4px rgba(61,53,48,.06)",borderLeft:`4px solid ${c.accent}`}},
+          ].map(c=>React.createElement('div',{key:c.label,style:{background:"var(--card)",borderRadius:12,padding:"12px 14px",boxShadow:"0 1px 4px rgba(61,53,48,.06)",borderLeft:`4px solid ${c.accent}`}},
             React.createElement('div',{style:{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",marginBottom:2}},c.label),
             React.createElement('div',{style:{fontFamily:"'Lora',serif",fontSize:22,fontWeight:700,lineHeight:1}},c.value),
             React.createElement('div',{style:{fontSize:10,color:"var(--muted)",marginTop:2}},c.sub)
@@ -829,18 +862,18 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
                   isFree&&ti>0&&ti%3===0&&React.createElement(AdInline),
                   React.createElement('div',{
                     className:`h-row${dragOverState===gi?" dov":""}`,
-                    style:{background:"white",borderRadius:12,padding:"12px 13px",marginBottom:8,display:"flex",alignItems:"center",gap:10,boxShadow:"0 1px 4px rgba(61,53,48,.06)",border:`2px solid ${dragOverState===gi?"#c4a882":"transparent"}`,opacity:done?.62:1,transition:"border .15s"},
+                    style:{background:"var(--card)",borderRadius:12,padding:"12px 13px",marginBottom:8,display:"flex",alignItems:"center",gap:10,boxShadow:"0 1px 4px rgba(61,53,48,.06)",border:`2px solid ${dragOverState===gi?"#c4a882":"transparent"}`,opacity:done?.62:1,transition:"border .15s"},
                     draggable:true,onDragStart:()=>onDS(gi),onDragEnter:()=>onDE(gi),onDragEnd:onDEnd,onDragOver:e=>e.preventDefault()
                   },
                     React.createElement('span',{style:{cursor:"grab",color:"#e8d9c4",fontSize:14,flexShrink:0,userSelect:"none"}},"☰"),
                     React.createElement('div',{
-                      style:{width:24,height:24,borderRadius:7,border:`2px solid ${done?"#c4622d":"#e8d9c4"}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,background:done?"#c4622d":"white",transition:"all .18s"},
+                      style:{width:24,height:24,borderRadius:7,border:`2px solid ${done?"var(--accent)":"var(--sand)"}`,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,background:done?"var(--accent)":"var(--card)",transition:"all .18s"},
                       onClick:()=>toggle(h.id,today)
                     },done&&React.createElement('svg',{width:"11",height:"9",viewBox:"0 0 11 9"},React.createElement('polyline',{points:"1,4.5 4,7.5 10,1",stroke:"white",strokeWidth:"2.2",fill:"none",strokeLinecap:"round",strokeLinejoin:"round"}))),
                     React.createElement('div',{style:{flex:1,minWidth:0}},
                       React.createElement('div',{style:{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:3}},
                         React.createElement('span',{style:{fontSize:14,fontWeight:500,textDecoration:done?"line-through":"none",color:done?"var(--muted)":"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"calc(100% - 80px)"}},h.name),
-                        str>0&&React.createElement('span',{style:{display:"inline-flex",alignItems:"center",gap:2,background:"#fff5ee",border:"1.5px solid #f5cba7",borderRadius:20,padding:"1px 7px",fontSize:11,fontWeight:700,color:"#c4622d",flexShrink:0}},"🔥",str)
+                        str>0&&React.createElement('span',{style:{display:"inline-flex",alignItems:"center",gap:2,background:"#fff5ee",border:"1.5px solid #f5cba7",borderRadius:20,padding:"1px 7px",fontSize:11,fontWeight:700,color:"var(--accent)",flexShrink:0}},"🔥",str)
                       ),
                       React.createElement('div',{style:{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},
                         React.createElement('span',{style:{fontSize:10,color:"var(--muted)"}},[h.category,h.schedule].join(" · ")),
@@ -861,9 +894,9 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
           React.createElement('div',{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}},
             React.createElement('h2',{style:{fontFamily:"'Lora',serif",fontSize:16,fontWeight:700}},"Weekly View"),
             React.createElement('div',{style:{display:"flex",gap:6,alignItems:"center"}},
-              React.createElement('button',{onClick:()=>setWOff(o=>o-1),style:{padding:"5px 10px",borderRadius:10,border:"1.5px solid #e8d9c4",fontSize:12,background:"white",cursor:"pointer",fontFamily:"inherit"}},"←"),
+              React.createElement('button',{onClick:()=>setWOff(o=>o-1),style:{padding:"5px 10px",borderRadius:10,border:"1.5px solid #e8d9c4",fontSize:12,background:"var(--card)",cursor:"pointer",fontFamily:"inherit"}},"←"),
               wOff!==0&&React.createElement('button',{onClick:()=>setWOff(0),style:{padding:"5px 10px",borderRadius:10,border:"1.5px solid var(--ink)",fontSize:11,background:"var(--ink)",color:"white",cursor:"pointer",fontFamily:"inherit"}},"Today"),
-              React.createElement('button',{onClick:()=>setWOff(o=>o+1),disabled:wOff>=0,style:{padding:"5px 10px",borderRadius:10,border:"1.5px solid #e8d9c4",fontSize:12,background:"white",cursor:"pointer",fontFamily:"inherit",opacity:wOff>=0?.35:1}},"→")
+              React.createElement('button',{onClick:()=>setWOff(o=>o+1),disabled:wOff>=0,style:{padding:"5px 10px",borderRadius:10,border:"1.5px solid #e8d9c4",fontSize:12,background:"var(--card)",cursor:"pointer",fontFamily:"inherit",opacity:wOff>=0?.35:1}},"→")
             )
           ),
           React.createElement('div',{style:{overflowX:"auto",WebkitOverflowScrolling:"touch"}},
@@ -880,23 +913,23 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
               )),
               React.createElement('tbody',null,
                 habits.filter(h=>!h.paused).map(h=>React.createElement('tr',{key:h.id},
-                  React.createElement('td',{style:{background:"white",padding:"8px 8px 8px 10px",borderRadius:"10px 0 0 10px"}},
+                  React.createElement('td',{style:{background:"var(--card)",padding:"8px 8px 8px 10px",borderRadius:"10px 0 0 10px"}},
                     React.createElement('div',{style:{display:"flex",alignItems:"center",gap:5}},
                       React.createElement('span',{style:{width:7,height:7,borderRadius:"50%",background:CAT_COLORS[h.category],flexShrink:0}}),
                       React.createElement('span',{style:{fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:80}},h.name)
                     )
                   ),
-                  wDates.map(d=>{const ap=habitOn(h,d),done=logs[h.id]?.dates?.[d]?.done,hn=!!logs[h.id]?.dates?.[d]?.note,fut=d>today;return React.createElement('td',{key:d,style:{background:"white",padding:"8px 3px",textAlign:"center"}},
+                  wDates.map(d=>{const ap=habitOn(h,d),done=logs[h.id]?.dates?.[d]?.done,hn=!!logs[h.id]?.dates?.[d]?.note,fut=d>today;return React.createElement('td',{key:d,style:{background:"var(--card)",padding:"8px 3px",textAlign:"center"}},
                     ap
                       ? React.createElement('div',{style:{display:"flex",flexDirection:"column",alignItems:"center",gap:2}},
-                          React.createElement('div',{style:{width:20,height:20,borderRadius:5,border:`2px solid ${done?"#c4622d":"#e8d9c4"}`,display:"flex",alignItems:"center",justifyContent:"center",background:done?"#c4622d":"white",cursor:fut?"default":"pointer",opacity:fut?.35:1},onClick:()=>!fut&&toggle(h.id,d)},
+                          React.createElement('div',{style:{width:20,height:20,borderRadius:5,border:`2px solid ${done?"var(--accent)":"var(--sand)"}`,display:"flex",alignItems:"center",justifyContent:"center",background:done?"var(--accent)":"var(--card)",cursor:fut?"default":"pointer",opacity:fut?.35:1},onClick:()=>!fut&&toggle(h.id,d)},
                             done&&React.createElement('svg',{width:"9",height:"7",viewBox:"0 0 9 7"},React.createElement('polyline',{points:"1,3.5 3.5,6 8,1",stroke:"white",strokeWidth:"2",fill:"none",strokeLinecap:"round",strokeLinejoin:"round"}))
                           ),
                           !fut&&React.createElement('span',{style:{fontSize:8,color:hn?"#8a6c2a":"#d4c9ba",cursor:"pointer"},onClick:()=>setNoteM({habitId:h.id,date:d,habitName:h.name})},hn?"📝":"✎")
                         )
                       : React.createElement('span',{style:{color:"#e0d5c5",fontSize:10}},"–")
                   );}),
-                  React.createElement('td',{style:{background:"white",padding:"8px 6px",borderRadius:"0 10px 10px 0",textAlign:"center"}},React.createElement(Ring,{pct:compRate(h,logs,wDates),color:CAT_COLORS[h.category],size:34}))
+                  React.createElement('td',{style:{background:"var(--card)",padding:"8px 6px",borderRadius:"0 10px 10px 0",textAlign:"center"}},React.createElement(Ring,{pct:compRate(h,logs,wDates),color:CAT_COLORS[h.category],size:34}))
                 ))
               )
             )
@@ -908,8 +941,8 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
           React.createElement('div',{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}},
             React.createElement('h2',{style:{fontFamily:"'Lora',serif",fontSize:16,fontWeight:700}},"Reports"),
             React.createElement('div',{style:{display:"flex",gap:6}},
-              React.createElement('button',{onClick:()=>exportCSV(habits,logs,rDates,rPeriod),style:{padding:"6px 12px",borderRadius:9,border:"1.5px solid #e8d9c4",background:"white",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"↓ CSV"),
-              React.createElement('button',{onClick:()=>exportPDF(habits,logs,rDates,rPeriod),style:{padding:"6px 12px",borderRadius:9,border:"1.5px solid #e8d9c4",background:"white",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"↓ PDF")
+              React.createElement('button',{onClick:()=>exportCSV(habits,logs,rDates,rPeriod),style:{padding:"6px 12px",borderRadius:9,border:"1.5px solid #e8d9c4",background:"var(--card)",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"↓ CSV"),
+              React.createElement('button',{onClick:()=>exportPDF(habits,logs,rDates,rPeriod),style:{padding:"6px 12px",borderRadius:9,border:"1.5px solid #e8d9c4",background:"var(--card)",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"↓ PDF")
             )
           ),
           React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:5,marginBottom:12}},
@@ -920,10 +953,10 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
             : React.createElement('div',null,
                 // Overall
                 (()=>{const tA=habits.reduce((s,h)=>s+rDates.filter(d=>habitOn(h,d)).length,0),tD=habits.reduce((s,h)=>s+rDates.filter(d=>habitOn(h,d)&&logs[h.id]?.dates?.[d]?.done).length,0),pct=tA?Math.round(tD/tA*100):0;
-                return React.createElement('div',{style:{background:"linear-gradient(135deg,#fdf6ee,#f5ede0)",borderRadius:14,padding:"16px",marginBottom:12,boxShadow:"0 1px 4px rgba(61,53,48,.06)"}},
+                return React.createElement('div',{style:{background:"linear-gradient(135deg,var(--bg),var(--accent-light))",borderRadius:14,padding:"16px",marginBottom:12,boxShadow:"0 1px 4px rgba(61,53,48,.06)"}},
                   React.createElement('div',{style:{fontFamily:"'Lora',serif",fontSize:13,fontWeight:700,marginBottom:8}},"Overall — "+PERIOD_LABELS[rPeriod]),
                   React.createElement('div',{style:{display:"flex",alignItems:"center",gap:12}},
-                    React.createElement(Ring,{pct,color:"#c4622d",size:50}),
+                    React.createElement(Ring,{pct,color:"var(--accent)",size:50}),
                     React.createElement('div',null,
                       React.createElement('div',{style:{fontSize:13,fontWeight:600}},[tD,"of",tA,"habit-days"].join(" ")),
                       React.createElement('div',{style:{fontSize:11,color:"var(--muted)",marginTop:2}},rDates[0]+" → "+rDates[rDates.length-1])
@@ -932,13 +965,13 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
                 );})(),
                 // Per habit
                 habits.map(h=>{const app=rDates.filter(d=>habitOn(h,d)),done=app.filter(d=>logs[h.id]?.dates?.[d]?.done),pct=app.length?Math.round(done.length/app.length*100):null,str=streak(h,logs),nd=app.filter(d=>logs[h.id]?.dates?.[d]?.note);
-                return React.createElement('div',{key:h.id,style:{background:"white",borderRadius:12,padding:"14px",marginBottom:8,boxShadow:"0 1px 4px rgba(61,53,48,.06)"}},
+                return React.createElement('div',{key:h.id,style:{background:"var(--card)",borderRadius:12,padding:"14px",marginBottom:8,boxShadow:"0 1px 4px rgba(61,53,48,.06)"}},
                   React.createElement('div',{style:{display:"flex",alignItems:"center",gap:10}},
                     React.createElement(Ring,{pct,color:CAT_COLORS[h.category],size:40}),
                     React.createElement('div',{style:{flex:1,minWidth:0}},
                       React.createElement('div',{style:{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:3}},
                         React.createElement('span',{style:{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:160}},h.name),
-                        str>0&&React.createElement('span',{style:{fontSize:11,color:"#c4622d",fontWeight:700}},"🔥"+str)
+                        str>0&&React.createElement('span',{style:{fontSize:11,color:"var(--accent)",fontWeight:700}},"🔥"+str)
                       ),
                       React.createElement('div',{style:{height:6,borderRadius:3,background:"#e8d9c4",overflow:"hidden"}},React.createElement('div',{style:{height:6,borderRadius:3,background:CAT_COLORS[h.category],width:`${pct||0}%`,transition:"width .5s"}})),
                       React.createElement('div',{style:{fontSize:10,color:"var(--muted)",marginTop:3}},[done.length+"/"+app.length+" days",h.schedule].join(" · ")),
@@ -961,7 +994,7 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
           habits.length===0
             ? React.createElement('div',{style:{textAlign:"center",padding:"40px",color:"var(--muted)"}},React.createElement('div',{style:{fontSize:32,marginBottom:8}},"🌱"),React.createElement('p',null,"No habits yet."))
             : habits.map((h,i)=>React.createElement('div',{key:h.id,
-                style:{background:"white",borderRadius:12,padding:"11px 13px",marginBottom:7,display:"flex",alignItems:"center",gap:9,boxShadow:"0 1px 4px rgba(61,53,48,.06)",border:`2px solid ${dragOverState===i?"#c4a882":"transparent"}`,transition:"border .15s"},
+                style:{background:"var(--card)",borderRadius:12,padding:"11px 13px",marginBottom:7,display:"flex",alignItems:"center",gap:9,boxShadow:"0 1px 4px rgba(61,53,48,.06)",border:`2px solid ${dragOverState===i?"#c4a882":"transparent"}`,transition:"border .15s"},
                 draggable:true,onDragStart:()=>onDS(i),onDragEnter:()=>onDE(i),onDragEnd:onDEnd,onDragOver:e=>e.preventDefault()
               },
                 React.createElement('span',{style:{cursor:"grab",color:"#e8d9c4",fontSize:14,flexShrink:0,userSelect:"none"}},"☰"),
@@ -971,8 +1004,8 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
                   React.createElement('div',{style:{fontSize:10,color:"var(--muted)",marginTop:1}},[h.category,h.schedule].join(" · "))
                 ),
                 h.paused&&React.createElement('span',{style:{fontSize:10,background:"#f5f0e8",color:"#9e8e80",padding:"2px 7px",borderRadius:8,flexShrink:0}},"Paused"),
-                React.createElement('button',{onClick:()=>{const nh=habits.map(x=>x.id===h.id?{...x,paused:!x.paused}:x);updH(nh);},style:{padding:"5px 9px",borderRadius:8,border:"1.5px solid #e8d9c4",fontSize:10,fontWeight:600,background:"white",cursor:"pointer",fontFamily:"inherit",flexShrink:0}},h.paused?"Resume":"Pause"),
-                React.createElement('button',{onClick:()=>{setEditH(h);setShowAdd(true);},style:{padding:"5px 9px",borderRadius:8,border:"1.5px solid #e8d9c4",fontSize:10,fontWeight:600,background:"white",cursor:"pointer",fontFamily:"inherit",flexShrink:0}},"Edit"),
+                React.createElement('button',{onClick:()=>{const nh=habits.map(x=>x.id===h.id?{...x,paused:!x.paused}:x);updH(nh);},style:{padding:"5px 9px",borderRadius:8,border:"1.5px solid #e8d9c4",fontSize:10,fontWeight:600,background:"var(--card)",cursor:"pointer",fontFamily:"inherit",flexShrink:0}},h.paused?"Resume":"Pause"),
+                React.createElement('button',{onClick:()=>{setEditH(h);setShowAdd(true);},style:{padding:"5px 9px",borderRadius:8,border:"1.5px solid #e8d9c4",fontSize:10,fontWeight:600,background:"var(--card)",cursor:"pointer",fontFamily:"inherit",flexShrink:0}},"Edit"),
                 React.createElement('button',{onClick:()=>delHabit(h.id),style:{padding:"5px 9px",borderRadius:8,border:"1.5px solid #f5c6bb",fontSize:10,fontWeight:600,background:"#fdf0ed",color:"#c0392b",cursor:"pointer",fontFamily:"inherit",flexShrink:0}},"Del")
               ))
         )
@@ -980,10 +1013,10 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
     ),
 
     // Bottom navigation
-    React.createElement('div',{style:{background:"white",borderTop:"1px solid #ede8e0",display:"flex",paddingBottom:"env(safe-area-inset-bottom)",flexShrink:0}},
+    React.createElement('div',{style:{background:"var(--card)",borderTop:"1px solid var(--border)",display:"flex",paddingBottom:"env(safe-area-inset-bottom)",flexShrink:0}},
       NAV.map(n=>React.createElement('button',{key:n.key,onClick:()=>setView(n.key),style:{flex:1,padding:"10px 4px 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}},
         React.createElement('span',{style:{fontSize:18,filter:view===n.key?"none":"grayscale(100%) opacity(50%)",transition:"filter .2s"}},n.icon),
-        React.createElement('span',{style:{fontSize:10,fontWeight:view===n.key?700:400,color:view===n.key?"#c4622d":"#9e8e80",transition:"color .2s"}},n.label)
+        React.createElement('span',{style:{fontSize:10,fontWeight:view===n.key?700:400,color:view===n.key?"var(--accent)":"var(--muted)",transition:"color .2s"}},n.label)
       ))
     ),
 
@@ -1015,7 +1048,7 @@ function App() {
     }
   },[screen]);
 
-  if(screen==="loading") return React.createElement('div',{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#c4622d",color:"white",fontFamily:"'Lora',serif",fontSize:18,gap:8}},
+  if(screen==="loading") return React.createElement('div',{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"var(--accent)",color:"white",fontFamily:"'Lora',serif",fontSize:18,gap:8}},
     React.createElement('span',null,"◆"),React.createElement('span',null,"Momentum")
   );
   if(screen==="landing") return React.createElement(LandingPage,{onSignup:()=>{setAuthMode("signup");setScreen("auth");},onLogin:()=>{setAuthMode("login");setScreen("auth");}});
@@ -1023,7 +1056,7 @@ function App() {
   if(screen==="onboarding") return React.createElement(OnboardingPage,{user,onComplete:u=>{setUser(u);setScreen("app");}});
   // HabitApp stays mounted for "app", "account", and "admin" screens so its
   // state (habits, logs, loaded) is never lost when opening overlaid screens.
-  const overlay = {position:"fixed",inset:0,zIndex:100,background:"#faf7f2",overflowY:"auto",paddingBottom:"env(safe-area-inset-bottom)"};
+  const overlay = {position:"fixed",inset:0,zIndex:100,background:"var(--bg)",overflowY:"auto",paddingBottom:"env(safe-area-inset-bottom)"};
   if(screen==="app"||screen==="account"||screen==="admin") return React.createElement('div',{style:{height:"100%"}},
     React.createElement(HabitApp,{user,onLogout:async()=>{await clearAuth();setUser(null);setScreen("landing");},onOpenAccount:()=>setScreen("account"),onPlanChange:u=>setUser(u)}),
     screen==="account"&&React.createElement('div',{style:overlay},

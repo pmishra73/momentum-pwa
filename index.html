@@ -47,14 +47,19 @@
       --safe-bottom: env(safe-area-inset-bottom, 0px);
       --safe-left:   env(safe-area-inset-left,   0px);
       --safe-right:  env(safe-area-inset-right,  0px);
-      --ink:   #3d3530;
-      --muted: #9e8e80;
-      --sand:  #e8d9c4;
+      --ink:          #3d3530;
+      --muted:        #9e8e80;
+      --sand:         #e8d9c4;
+      --bg:           #faf7f2;
+      --card:         #ffffff;
+      --border:       #ede8e0;
+      --accent:       #c4622d;
+      --accent-light: #f5ede0;
     }
     html, body { height: 100%; overflow: hidden; }
     body {
       font-family: 'DM Sans', 'Helvetica Neue', sans-serif;
-      background: #faf7f2; color: #3d3530;
+      background: var(--bg); color: var(--ink);
       /* Prevent overscroll bounce on iOS */
       overscroll-behavior: none;
       -webkit-overflow-scrolling: touch;
