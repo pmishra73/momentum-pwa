@@ -34,31 +34,23 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics-compat.js"></script>
   <script>
-    // ── Momentum Firebase Config ──────────────────────────────────────────────
-    // SETUP (one time, ~5 min):
-    // 1. Go to https://console.firebase.google.com → create a project
-    // 2. Authentication → Sign-in method → enable Email/Password
-    // 3. Firestore Database → create database → start in test mode
-    // 4. Project settings → Your apps → Add web app → copy your config here
     const FIREBASE_CONFIG = {
-      apiKey:            "YOUR_API_KEY",
-      authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
-      projectId:         "YOUR_PROJECT_ID",
-      storageBucket:     "YOUR_PROJECT_ID.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId:             "YOUR_APP_ID",
+      apiKey:            "AIzaSyBVIdjXUQIVKeIYBYc7UfeFrAugg6ElBF8",
+      authDomain:        "momentum-pwa-15664.firebaseapp.com",
+      projectId:         "momentum-pwa-15664",
+      storageBucket:     "momentum-pwa-15664.firebasestorage.app",
+      messagingSenderId: "690634295523",
+      appId:             "1:690634295523:web:8101c8dd3aa02b45555dd6",
+      measurementId:     "G-89RX5ZTPQY",
     };
-    const _fbConfigured = FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith("YOUR_");
-    if (_fbConfigured) {
-      firebase.initializeApp(FIREBASE_CONFIG);
-      firebase.firestore().enablePersistence({ synchronizeTabs: true })
-        .catch(e => console.warn('[FB] Offline persistence:', e.code));
-      window.__fb = { auth: firebase.auth(), db: firebase.firestore() };
-      console.log('[FB] Firebase ready — cross-device sync enabled');
-    } else {
-      console.warn('[FB] Firebase not configured — local-only mode (data stays on this device)');
-    }
+    firebase.initializeApp(FIREBASE_CONFIG);
+    firebase.analytics();
+    firebase.firestore().enablePersistence({ synchronizeTabs: true })
+      .catch(e => console.warn('[FB] Offline persistence:', e.code));
+    window.__fb = { auth: firebase.auth(), db: firebase.firestore() };
+    console.log('[FB] Firebase ready — cross-device sync enabled');
   </script>
 
   <!-- PWA Manifest -->
