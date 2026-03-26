@@ -121,15 +121,17 @@
 <script type="text/babel" src="app.js" data-presets="react"></script>
 
 <script>
-  // Dismiss splash after app loads
+  // Called by React once the first real screen is ready
+  window.__hideSplash = function() {
+    const s = document.getElementById('splash');
+    if (!s) return;
+    s.classList.add('hide');
+    setTimeout(() => s.remove(), 450);
+    window.__hideSplash = null;
+  };
+  // Fallback: force-hide after 8 s in case Babel/React never fires
   window.addEventListener('load', () => {
-    setTimeout(() => {
-      const s = document.getElementById('splash');
-      if (s) {
-        s.classList.add('hide');
-        setTimeout(() => s.remove(), 450);
-      }
-    }, 1600);
+    setTimeout(() => { if (window.__hideSplash) window.__hideSplash(); }, 8000);
   });
 </script>
 

@@ -931,6 +931,12 @@ function App() {
     });
   },[]);
 
+  useEffect(()=>{
+    if(screen!=="loading"&&typeof window.__hideSplash==="function"){
+      window.__hideSplash();
+    }
+  },[screen]);
+
   if(screen==="loading") return React.createElement('div',{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#c4622d",color:"white",fontFamily:"'Lora',serif",fontSize:18,gap:8}},
     React.createElement('span',null,"◆"),React.createElement('span',null,"Momentum")
   );
