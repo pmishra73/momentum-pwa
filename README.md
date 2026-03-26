@@ -74,7 +74,7 @@ Add a `_redirects` file:
 git init
 git add .
 git commit -m "Initial Momentum PWA"
-git remote add origin https://github.com/YOUR_USERNAME/momentum-pwa.git
+git remote add origin https://github.com/pmishra73/momentum-pwa.git
 git push -u origin main
 
 # 2. In repo settings → Pages → Source: main branch / root
