@@ -164,6 +164,19 @@ function NoteModal({habitId,date,habitName,existing,onClose,onSave}) {
   );
 }
 
+// Defined outside HabitModal so their references are stable across renders
+// (inline definitions cause React to remount children, losing input focus)
+const ModalRow=({label,children})=>React.createElement('div',{style:{marginBottom:16}},
+  React.createElement('div',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",marginBottom:6}},label),
+  children
+);
+const ModalPills=({items,active,onPick,colorFn})=>React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:6}},
+  items.map(i=>React.createElement('button',{key:i,onClick:()=>onPick(i),style:{padding:"7px 13px",borderRadius:20,fontSize:13,border:`1.5px solid ${active===i?(colorFn?colorFn(i):"var(--ink)"):"var(--sand)"}`,background:active===i?(colorFn?colorFn(i):"var(--ink)"):"white",color:active===i?"white":(colorFn?colorFn(i):"var(--ink)"),fontWeight:active===i?600:400,transition:"all .15s",fontFamily:"inherit",cursor:"pointer"}},i))
+);
+const ModalMultiPills=({items,active,onToggle})=>React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:6}},
+  items.map((item,i)=>React.createElement('button',{key:i,onClick:()=>onToggle(i),style:{padding:"7px 13px",borderRadius:20,fontSize:13,border:"1.5px solid var(--sand)",background:active.includes(i)?"var(--ink)":"white",color:active.includes(i)?"white":"var(--ink)",fontFamily:"inherit",cursor:"pointer"}},item.slice(0,3)))
+);
+
 function HabitModal({existing,onClose,onSave}) {
   const [name,setName]=useState(existing?.name||"");
   const [cat,setCat]=useState(existing?.category||"Health");
@@ -176,34 +189,24 @@ function HabitModal({existing,onClose,onSave}) {
     if(!name.trim()) return;
     onSave({id:existing?.id||`h_${Date.now()}`,name:name.trim(),category:cat,schedule:sched,customDays:sched==="Custom"?cdays:[],startDate:existing?.startDate||todayStr(),endDate:hasEnd?endDate:"",paused:existing?.paused||false});
   };
-  const Row=({label,children})=>React.createElement('div',{style:{marginBottom:16}},
-    React.createElement('div',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",marginBottom:6}},label),
-    children
-  );
-  const Pills=({items,active,onPick,colorFn})=>React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:6}},
-    items.map(i=>React.createElement('button',{key:i,onClick:()=>onPick(i),style:{padding:"7px 13px",borderRadius:20,fontSize:13,border:`1.5px solid ${active===i?(colorFn?colorFn(i):"var(--ink)"):"var(--sand)"}`,background:active===i?(colorFn?colorFn(i):"var(--ink)"):"white",color:active===i?"white":(colorFn?colorFn(i):"var(--ink)"),fontWeight:active===i?600:400,transition:"all .15s",fontFamily:"inherit",cursor:"pointer"}},i))
-  );
-  const MultiPills=({items,active,onToggle})=>React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:6}},
-    items.map((item,i)=>React.createElement('button',{key:i,onClick:()=>onToggle(i),style:{padding:"7px 13px",borderRadius:20,fontSize:13,border:"1.5px solid var(--sand)",background:active.includes(i)?"var(--ink)":"white",color:active.includes(i)?"white":"var(--ink)",fontFamily:"inherit",cursor:"pointer"}},item.slice(0,3)))
-  );
 
   return React.createElement(ModalWrap,{onClose},
     React.createElement('div',{style:{padding:"20px 20px 8px"}},
       React.createElement('div',{style:{width:36,height:4,background:"#e8d9c4",borderRadius:2,margin:"0 auto 16px"}}),
       React.createElement('div',{style:{fontFamily:"'Lora',serif",fontSize:19,fontWeight:700,marginBottom:16}},existing?"Edit Habit":"New Habit"),
-      React.createElement(Row,{label:"Name"},
+      React.createElement(ModalRow,{label:"Name"},
         React.createElement('input',{style:{width:"100%",padding:"11px 14px",border:"1.5px solid #e8d9c4",borderRadius:12,fontSize:14,outline:"none",background:"#faf7f2",fontFamily:"inherit"},placeholder:"e.g. Morning run…",value:name,onChange:e=>setName(e.target.value)})
       ),
-      React.createElement(Row,{label:"Category"},
-        React.createElement(Pills,{items:CATEGORIES,active:cat,onPick:setCat,colorFn:c=>CAT_COLORS[c]})
+      React.createElement(ModalRow,{label:"Category"},
+        React.createElement(ModalPills,{items:CATEGORIES,active:cat,onPick:setCat,colorFn:c=>CAT_COLORS[c]})
       ),
-      React.createElement(Row,{label:"Schedule"},
-        React.createElement(Pills,{items:SCHED_OPTS,active:sched,onPick:setSched})
+      React.createElement(ModalRow,{label:"Schedule"},
+        React.createElement(ModalPills,{items:SCHED_OPTS,active:sched,onPick:setSched})
       ),
-      sched==="Custom"&&React.createElement(Row,{label:"Days"},
-        React.createElement(MultiPills,{items:FULL_DAYS,active:cdays,onToggle:tog})
+      sched==="Custom"&&React.createElement(ModalRow,{label:"Days"},
+        React.createElement(ModalMultiPills,{items:FULL_DAYS,active:cdays,onToggle:tog})
       ),
-      React.createElement(Row,{label:"Track Until"},
+      React.createElement(ModalRow,{label:"Track Until"},
         React.createElement('div',{style:{display:"flex",gap:6,marginBottom:8}},
           ["Indefinitely","Until a date"].map((l,i)=>React.createElement('button',{key:l,onClick:()=>setHasEnd(i===1),style:{padding:"7px 13px",borderRadius:20,fontSize:13,border:"1.5px solid var(--sand)",background:hasEnd===(i===1)?"var(--ink)":"white",color:hasEnd===(i===1)?"white":"var(--ink)",fontFamily:"inherit",cursor:"pointer"}},l))
         ),
