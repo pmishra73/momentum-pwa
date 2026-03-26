@@ -33,9 +33,18 @@ const idb = (() => {
 })();
 
 const serverStore = {
-  async get(k)   { try{ const r=await window.storage.get(k); return r?JSON.parse(r.value):null; }catch{return null;} },
-  async set(k,v) { try{ await window.storage.set(k,JSON.stringify(v)); }catch{} },
-  async del(k)   { try{ await window.storage.delete(k); }catch{} },
+  async get(k) {
+    try { const r=await window.storage.get(k); return r?JSON.parse(r.value):null; }
+    catch { try { const v=localStorage.getItem(k); return v?JSON.parse(v):null; } catch { return null; } }
+  },
+  async set(k,v) {
+    try { await window.storage.set(k,JSON.stringify(v)); }
+    catch { try { localStorage.setItem(k,JSON.stringify(v)); } catch {} }
+  },
+  async del(k) {
+    try { await window.storage.delete(k); }
+    catch { try { localStorage.removeItem(k); } catch {} }
+  },
 };
 const getStore   = plan => plan==="local" ? idb : serverStore;
 const loadUD     = (uid,plan) => getStore(plan).get(`mo:${uid}:data`);
