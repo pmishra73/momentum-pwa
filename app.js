@@ -761,7 +761,7 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
                     },done&&React.createElement('svg',{width:"11",height:"9",viewBox:"0 0 11 9"},React.createElement('polyline',{points:"1,4.5 4,7.5 10,1",stroke:"white",strokeWidth:"2.2",fill:"none",strokeLinecap:"round",strokeLinejoin:"round"}))),
                     React.createElement('div',{style:{flex:1,minWidth:0}},
                       React.createElement('div',{style:{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:3}},
-                        React.createElement('span',{style:{fontSize:14,fontWeight:500,textDecoration:done?"line-through":"none",color:done?"var(--muted)":"var(--ink)",-overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"calc(100% - 80px)"}},h.name),
+                        React.createElement('span',{style:{fontSize:14,fontWeight:500,textDecoration:done?"line-through":"none",color:done?"var(--muted)":"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"calc(100% - 80px)"}},h.name),
                         str>0&&React.createElement('span',{style:{display:"inline-flex",alignItems:"center",gap:2,background:"#fff5ee",border:"1.5px solid #f5cba7",borderRadius:20,padding:"1px 7px",fontSize:11,fontWeight:700,color:"#c4622d",flexShrink:0}},"🔥",str)
                       ),
                       React.createElement('div',{style:{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},

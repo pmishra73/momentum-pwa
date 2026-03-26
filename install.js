@@ -11,7 +11,8 @@ window.MomentumPWA = (() => {
       return null;
     }
     try {
-      swRegistration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      const base = new URL('./', location.href).pathname;
+      swRegistration = await navigator.serviceWorker.register('./sw.js', { scope: base });
       console.log('[PWA] SW registered:', swRegistration.scope);
 
       swRegistration.addEventListener('updatefound', () => {
