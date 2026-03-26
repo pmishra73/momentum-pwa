@@ -90,11 +90,21 @@ window.MomentumPWA = (() => {
     return permission;
   }
 
+  const LOCAL_NOTIF_KEY = 'mo:localNotifEnabled';
+  const hasRealVapidKey = VAPID_PUBLIC_KEY && !VAPID_PUBLIC_KEY.startsWith('YOUR_');
+
   async function subscribeToPush() {
-    if (!swRegistration) { console.warn('[PWA] No SW registration'); return null; }
     const permission = await requestNotificationPermission();
     if (permission !== 'granted') return null;
 
+    // No backend / no real VAPID key — use local notifications only
+    if (!hasRealVapidKey) {
+      localStorage.setItem(LOCAL_NOTIF_KEY, '1');
+      console.log('[PWA] Local notifications enabled (no VAPID key configured)');
+      return { local: true };
+    }
+
+    if (!swRegistration) { console.warn('[PWA] No SW registration'); return null; }
     try {
       const existing = await swRegistration.pushManager.getSubscription();
       if (existing) return existing;
@@ -104,7 +114,6 @@ window.MomentumPWA = (() => {
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
       });
       console.log('[PWA] Push subscribed:', JSON.stringify(subscription));
-      // In production: send `subscription` JSON to your backend to store
       return subscription;
     } catch (err) {
       console.error('[PWA] Push subscription failed:', err);
@@ -113,14 +122,21 @@ window.MomentumPWA = (() => {
   }
 
   async function unsubscribeFromPush() {
+    localStorage.removeItem(LOCAL_NOTIF_KEY);
     if (!swRegistration) return;
     const subscription = await swRegistration.pushManager.getSubscription();
     if (subscription) { await subscription.unsubscribe(); console.log('[PWA] Push unsubscribed'); }
   }
 
   async function getPushStatus() {
-    if (!('Notification' in window) || !('PushManager' in window)) return 'unsupported';
+    if (!('Notification' in window)) return 'unsupported';
     if (Notification.permission === 'denied') return 'denied';
+    // Local-notifications-only mode
+    if (!hasRealVapidKey) {
+      if (localStorage.getItem(LOCAL_NOTIF_KEY)) return 'subscribed';
+      return Notification.permission === 'granted' ? 'granted-not-subscribed' : 'default';
+    }
+    if (!('PushManager' in window)) return 'unsupported';
     if (!swRegistration) return 'no-sw';
     const sub = await swRegistration.pushManager.getSubscription();
     if (sub) return 'subscribed';

@@ -1021,12 +1021,19 @@ function App() {
   if(screen==="landing") return React.createElement(LandingPage,{onSignup:()=>{setAuthMode("signup");setScreen("auth");},onLogin:()=>{setAuthMode("login");setScreen("auth");}});
   if(screen==="auth")    return React.createElement(AuthPage,{mode:authMode,onAuth:u=>{setUser(u);setScreen(u.plan?"app":"onboarding");},onBack:()=>setScreen("landing")});
   if(screen==="onboarding") return React.createElement(OnboardingPage,{user,onComplete:u=>{setUser(u);setScreen("app");}});
-  if(screen==="account") return React.createElement('div',{style:{height:"100%",overflowY:"auto"}},
-    React.createElement(AccountPage,{user,onClose:()=>setScreen("app"),onLogout:async()=>{await clearAuth();setUser(null);setScreen("landing");},onPlanChange:u=>{setUser(u);setScreen("app");},onNotifications:()=>setShowNotif(true),onOpenAdmin:()=>setScreen("admin")}),
-    showNotif&&React.createElement(NotificationSettings,{onClose:()=>setShowNotif(false)})
+  // HabitApp stays mounted for "app", "account", and "admin" screens so its
+  // state (habits, logs, loaded) is never lost when opening overlaid screens.
+  const overlay = {position:"fixed",inset:0,zIndex:100,background:"#faf7f2",overflowY:"auto",paddingBottom:"env(safe-area-inset-bottom)"};
+  if(screen==="app"||screen==="account"||screen==="admin") return React.createElement('div',{style:{height:"100%"}},
+    React.createElement(HabitApp,{user,onLogout:async()=>{await clearAuth();setUser(null);setScreen("landing");},onOpenAccount:()=>setScreen("account"),onPlanChange:u=>setUser(u)}),
+    screen==="account"&&React.createElement('div',{style:overlay},
+      React.createElement(AccountPage,{user,onClose:()=>setScreen("app"),onLogout:async()=>{await clearAuth();setUser(null);setScreen("landing");},onPlanChange:u=>{setUser(u);setScreen("app");},onNotifications:()=>setShowNotif(true),onOpenAdmin:()=>setScreen("admin")}),
+      showNotif&&React.createElement(NotificationSettings,{onClose:()=>setShowNotif(false)})
+    ),
+    screen==="admin"&&React.createElement('div',{style:overlay},
+      React.createElement(AdminPanel,{onClose:()=>setScreen("account")})
+    )
   );
-  if(screen==="admin") return React.createElement(AdminPanel,{onClose:()=>setScreen("account")});
-  if(screen==="app") return React.createElement(HabitApp,{user,onLogout:async()=>{await clearAuth();setUser(null);setScreen("landing");},onOpenAccount:()=>setScreen("account"),onPlanChange:u=>setUser(u)});
   return null;
 }
 
