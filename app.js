@@ -57,28 +57,66 @@ const idb = (() => {
   };
 })();
 
-const serverStore = {
-  async get(k) {
-    try { const r=await window.storage.get(k); return r?JSON.parse(r.value):null; }
-    catch { try { const v=localStorage.getItem(k); return v?JSON.parse(v):null; } catch { return null; } }
-  },
-  async set(k,v) {
-    try { await window.storage.set(k,JSON.stringify(v)); }
-    catch { try { localStorage.setItem(k,JSON.stringify(v)); } catch {} }
-  },
-  async del(k) {
-    try { await window.storage.delete(k); }
-    catch { try { localStorage.removeItem(k); } catch {} }
-  },
+// ─── localStorage fallback (when Firebase not configured) ─────────────────────
+const ls = {
+  get: k => { try { const v=localStorage.getItem(k); return Promise.resolve(v?JSON.parse(v):null); } catch { return Promise.resolve(null); } },
+  set: (k,v) => { try { localStorage.setItem(k,JSON.stringify(v)); } catch {} return Promise.resolve(); },
+  del: k => { try { localStorage.removeItem(k); } catch {} return Promise.resolve(); },
 };
-const getStore   = plan => plan==="local" ? idb : serverStore;
-const loadUD     = (uid,plan) => getStore(plan).get(`mo:${uid}:data`);
-const saveUD     = (uid,plan,d) => getStore(plan).set(`mo:${uid}:data`,d);
-const loadAuth   = () => serverStore.get('mo:auth');
-const saveAuth   = a => serverStore.set('mo:auth',a);
-const clearAuth  = () => serverStore.del('mo:auth');
-const loadUsers  = () => serverStore.get('mo:users').then(u=>u||{});
-const saveUsers  = u => serverStore.set('mo:users',u);
+
+// ─── Firestore helpers ─────────────────────────────────────────────────────────
+const fsGet    = async (col,id) => { try { const s=await window.__fb.db.collection(col).doc(id).get(); return s.exists?s.data():null; } catch { return null; } };
+const fsSet    = async (col,id,data,merge=true) => { try { await window.__fb.db.collection(col).doc(id).set(data,{merge}); return true; } catch(e) { console.error('[FB] write failed:',e); return false; } };
+const fsGetAll = async (col) => { try { const s=await window.__fb.db.collection(col).get(); const r={}; s.forEach(d=>{r[d.id]=d.data();}); return r; } catch { return {}; } };
+
+// ─── User habit data ───────────────────────────────────────────────────────────
+// "local" plan → IndexedDB (device-only, by design)
+// "free" / "cloud" plan → Firestore (cross-device) with localStorage fallback
+const loadUD = async (uid,plan) => {
+  if (plan==="local") return idb.get(`mo:${uid}:data`);
+  if (window.__fb) { const d=await fsGet('userdata',uid); return d; }
+  return ls.get(`mo:${uid}:data`);
+};
+const saveUD = async (uid,plan,d) => {
+  if (plan==="local") return idb.set(`mo:${uid}:data`,d);
+  if (window.__fb) { await fsSet('userdata',uid,d,false); return; }
+  return ls.set(`mo:${uid}:data`,d);
+};
+
+// ─── Auth ──────────────────────────────────────────────────────────────────────
+// When Firebase is configured, session is managed by Firebase Auth (onAuthStateChanged).
+// loadAuth() is only used as a fallback path when Firebase is not available.
+const loadAuth  = () => window.__fb ? Promise.resolve(null) : ls.get('mo:auth');
+const saveAuth  = async a => {
+  if (window.__fb) { const {uid,...p}=a; const {password:_,...safe}=p; await fsSet('users',uid,safe); return; }
+  return ls.set('mo:auth',a);
+};
+const clearAuth = async () => {
+  if (window.__fb) { await window.__fb.auth.signOut(); return; }
+  return ls.del('mo:auth');
+};
+
+// ─── User registry (admin panel) ──────────────────────────────────────────────
+const loadUsers = async () => {
+  if (window.__fb) {
+    const all=await fsGetAll('users');
+    const byEmail={};
+    Object.entries(all).forEach(([uid,p])=>{ byEmail[p.email]={uid,...p}; });
+    return byEmail;
+  }
+  return ls.get('mo:users').then(u=>u||{});
+};
+const saveUsers = async u => {
+  if (window.__fb) {
+    await Promise.all(Object.values(u).map(async user=>{
+      if (!user.uid) return;
+      const {password:_,...safe}=user;
+      await fsSet('users',user.uid,safe);
+    }));
+    return;
+  }
+  return ls.set('mo:users',u);
+};
 
 // ─── DATE HELPERS ─────────────────────────────────────────────────────────────
 const todayStr = () => new Date().toISOString().split("T")[0];
@@ -370,19 +408,96 @@ function exportPDF(habits,logs,rdates,period) {
   if(w){w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Momentum Report</title><style>body{font-family:Georgia,serif;background:#faf7f2;padding:28px;color:#3d3530;max-width:700px;margin:0 auto}@media print{body{padding:12px}}</style></head><body><h1 style="font-size:24px;margin-bottom:4px">◆ Momentum</h1><p style="color:#9e8e80;font-size:13px;margin-bottom:22px">${PERIOD_LABELS[period]} · ${rdates[0]}–${rdates[rdates.length-1]} · Overall: <b>${tA?Math.round(tD/tA*100):0}%</b></p>${lines}<script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();}
 }
 
+// ─── CONFIRM EMAIL LINK ───────────────────────────────────────────────────────
+// Shown when the user opens an email sign-in link on a DIFFERENT device/browser
+// than where they originally requested it (no email saved in localStorage).
+function ConfirmLinkPage({linkUrl}) {
+  const [email,setEmail]=useState("");
+  const [err,setErr]=useState("");
+  const [loading,setLoading]=useState(false);
+  const confirm=async()=>{
+    if(!email.trim()) return setErr("Please enter your email.");
+    setLoading(true); setErr("");
+    try {
+      await window.__fb.auth.signInWithEmailLink(email.trim(),linkUrl);
+      history.replaceState({},'',location.pathname);
+      // onAuthStateChanged in App will handle navigation
+    } catch(e) {
+      const msgs={'auth/invalid-email':'Invalid email.','auth/invalid-action-code':'This link is invalid or has expired. Please request a new one.','auth/expired-action-code':'Link expired. Please request a new one.','auth/user-disabled':'Account disabled.'};
+      setErr(msgs[e.code]||e.message||"Sign-in failed.");
+      setLoading(false);
+    }
+  };
+  return React.createElement('div',{style:{minHeight:"100%",background:"var(--bg)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"32px 24px",paddingBottom:"calc(32px + env(safe-area-inset-bottom))"}},
+    React.createElement('div',{style:{fontSize:52,marginBottom:16}},"🔗"),
+    React.createElement('div',{style:{fontFamily:"'Lora',serif",fontSize:22,fontWeight:700,marginBottom:8,textAlign:"center"}},"Confirm your email"),
+    React.createElement('div',{style:{fontSize:14,color:"var(--muted)",textAlign:"center",lineHeight:1.6,marginBottom:28,maxWidth:300}},"You opened a sign-in link. Enter the email address you used to request it."),
+    React.createElement('input',{type:"email",placeholder:"you@example.com",value:email,onChange:e=>setEmail(e.target.value),onKeyDown:e=>e.key==="Enter"&&confirm(),style:{width:"100%",maxWidth:320,padding:"13px 15px",border:"1.5px solid var(--sand)",borderRadius:14,fontSize:15,outline:"none",background:"var(--card)",fontFamily:"'DM Sans',sans-serif",marginBottom:err?12:20}}),
+    err&&React.createElement('div',{style:{background:"#fdf0ed",color:"#c0392b",padding:"11px 14px",borderRadius:10,fontSize:13,marginBottom:16,width:"100%",maxWidth:320}},err),
+    React.createElement('button',{onClick:confirm,disabled:loading,style:{width:"100%",maxWidth:320,padding:"15px",borderRadius:14,background:"var(--accent)",color:"white",fontSize:16,fontWeight:700,border:"none",cursor:"pointer",opacity:loading?.7:1}},loading?"Signing in…":"Continue →")
+  );
+}
+
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 function AuthPage({mode:im,onAuth,onBack}) {
   const [mode,setMode]=useState(im);
+  const [authType,setAuthType]=useState("password"); // "password" | "link"
   const [email,setEmail]=useState("");
   const [pw,setPw]=useState("");
   const [name,setName]=useState("");
   const [err,setErr]=useState("");
   const [loading,setLoading]=useState(false);
+  const [linkSent,setLinkSent]=useState(false);
+
   const handle=async()=>{
-    if(!email.trim()||!pw.trim()) return setErr("Please fill in all fields.");
-    if(mode==="signup"&&!name.trim()) return setErr("Please enter your name.");
-    if(pw.length<6) return setErr("Password must be 6+ characters.");
+    if(!email.trim()) return setErr("Please enter your email.");
     setLoading(true); setErr("");
+
+    // ── Email link (passwordless) ─────────────────────────────────────────────
+    if(authType==="link") {
+      if(!window.__fb){setErr("Email link requires Firebase — not configured.");setLoading(false);return;}
+      try {
+        const settings={url:location.href.split('?')[0],handleCodeInApp:true};
+        await window.__fb.auth.sendSignInLinkToEmail(email.trim(),settings);
+        localStorage.setItem('mo:emailForSignIn',email.trim());
+        setLinkSent(true);
+      } catch(e) {
+        const msgs={'auth/invalid-email':'Invalid email address.','auth/too-many-requests':'Too many requests. Try again later.'};
+        setErr(msgs[e.code]||e.message||"Failed to send link.");
+      }
+      setLoading(false); return;
+    }
+
+    // ── Password auth ─────────────────────────────────────────────────────────
+    if(!pw.trim()) return (setErr("Please fill in all fields."),setLoading(false));
+    if(mode==="signup"&&!name.trim()) return (setErr("Please enter your name."),setLoading(false));
+    if(pw.length<6) return (setErr("Password must be 6+ characters."),setLoading(false));
+
+    if(window.__fb) {
+      try {
+        if(mode==="login") {
+          const cred=await window.__fb.auth.signInWithEmailAndPassword(email.trim(),pw);
+          const profile=await fsGet('users',cred.user.uid);
+          if(!profile){setErr("Account profile not found. Please sign up.");setLoading(false);return;}
+          const admin=isAdmin(cred.user.email);
+          const finalP=admin?{...profile,plan:"cloud",role:"admin"}:profile;
+          if(admin&&profile.plan!=="cloud") await fsSet('users',cred.user.uid,{plan:"cloud",role:"admin"});
+          onAuth({uid:cred.user.uid,email:cred.user.email,...finalP});
+        } else {
+          const cred=await window.__fb.auth.createUserWithEmailAndPassword(email.trim(),pw);
+          const admin=isAdmin(email.trim().toLowerCase());
+          const profile={email:email.trim().toLowerCase(),name:name.trim(),plan:admin?"cloud":null,billing:"monthly",role:admin?"admin":undefined,joinedAt:todayStr()};
+          await fsSet('users',cred.user.uid,profile,false);
+          onAuth({uid:cred.user.uid,...profile});
+        }
+      } catch(e) {
+        const msgs={'auth/email-already-in-use':'Email already registered.','auth/user-not-found':'No account with that email.','auth/wrong-password':'Incorrect password.','auth/invalid-email':'Invalid email address.','auth/too-many-requests':'Too many attempts. Try again later.','auth/invalid-credential':'Invalid email or password.'};
+        setErr(msgs[e.code]||e.message||"Something went wrong.");
+      }
+      setLoading(false); return;
+    }
+
+    // ── localStorage fallback ─────────────────────────────────────────────────
     const users=await loadUsers();
     if(mode==="login"){
       const u=users[email.toLowerCase()];
@@ -403,7 +518,10 @@ function AuthPage({mode:im,onAuth,onBack}) {
     }
     setLoading(false);
   };
+
   const inp=extra=>({style:{width:"100%",padding:"13px 15px",border:"1.5px solid #e8d9c4",borderRadius:14,fontSize:15,outline:"none",background:"var(--bg)",fontFamily:"'DM Sans',sans-serif",marginTop:5},...extra});
+  const tabBtn=(t,label)=>React.createElement('button',{onClick:()=>{setAuthType(t);setErr("");setLinkSent(false);},style:{flex:1,padding:"9px",borderRadius:10,border:"none",background:authType===t?"var(--card)":"transparent",color:authType===t?"var(--ink)":"var(--muted)",fontWeight:authType===t?700:400,fontSize:13,cursor:"pointer",fontFamily:"inherit",boxShadow:authType===t?"0 1px 4px rgba(0,0,0,.08)":"none",transition:"all .15s"}},label);
+
   return React.createElement('div',{style:{minHeight:"100%",background:"var(--bg)",display:"flex",flexDirection:"column",padding:"0 24px 24px",paddingBottom:"calc(24px + env(safe-area-inset-bottom))"}},
     React.createElement('div',{style:{paddingTop:"calc(16px + env(safe-area-inset-top))"}},
       React.createElement('button',{onClick:onBack,style:{fontSize:13,color:"var(--muted)",marginBottom:24,background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:4}},"← Back"),
@@ -412,25 +530,55 @@ function AuthPage({mode:im,onAuth,onBack}) {
         React.createElement('span',{style:{fontFamily:"'Lora',serif",fontWeight:700,fontSize:19}},"Momentum")
       ),
       React.createElement('h2',{style:{fontFamily:"'Lora',serif",fontSize:26,fontWeight:700,marginBottom:6}},mode==="login"?"Welcome back":"Create account"),
-      React.createElement('p',{style:{fontSize:14,color:"var(--muted)",marginBottom:28}},mode==="login"?"Sign in to continue.":"Start building better habits today."),
-      mode==="signup"&&React.createElement('div',{style:{marginBottom:14}},
-        React.createElement('label',{style:{fontSize:12,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em"}},"Full Name"),
-        React.createElement('input',inp({placeholder:"Your name",value:name,onChange:e=>setName(e.target.value)}))
+      React.createElement('p',{style:{fontSize:14,color:"var(--muted)",marginBottom:20}},mode==="login"?"Sign in to continue.":"Start building better habits today."),
+
+      // Auth type toggle (only show for Firebase)
+      window.__fb&&React.createElement('div',{style:{display:"flex",background:"var(--accent-light)",borderRadius:12,padding:3,gap:2,marginBottom:22}},
+        tabBtn("password","🔑 Password"),
+        tabBtn("link","✉️ Email link")
       ),
-      React.createElement('div',{style:{marginBottom:14}},
-        React.createElement('label',{style:{fontSize:12,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em"}},"Email"),
-        React.createElement('input',inp({type:"email",placeholder:"you@example.com",value:email,onChange:e=>setEmail(e.target.value)}))
-      ),
-      React.createElement('div',{style:{marginBottom:20}},
-        React.createElement('label',{style:{fontSize:12,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em"}},"Password"),
-        React.createElement('input',inp({type:"password",placeholder:"Min 6 characters",value:pw,onChange:e=>setPw(e.target.value),onKeyDown:e=>e.key==="Enter"&&handle()}))
-      ),
-      err&&React.createElement('div',{style:{background:"#fdf0ed",color:"#c0392b",padding:"11px 14px",borderRadius:10,fontSize:13,marginBottom:16}},err),
-      React.createElement('button',{onClick:handle,disabled:loading,style:{width:"100%",padding:"15px",borderRadius:14,background:"var(--accent)",color:"white",fontSize:16,fontWeight:700,border:"none",cursor:"pointer",opacity:loading?.7:1}},loading?"Please wait…":mode==="login"?"Log in →":"Create Account →"),
-      React.createElement('div',{style:{textAlign:"center",marginTop:20,fontSize:14,color:"var(--muted)"}},
-        mode==="login"?"Don't have an account? ":"Already have an account? ",
-        React.createElement('button',{onClick:()=>{setMode(m=>m==="login"?"signup":"login");setErr("");},style:{color:"var(--accent)",fontWeight:600,textDecoration:"underline",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit"}},mode==="login"?"Sign up":"Log in")
-      )
+
+      // ── Email link flow ───────────────────────────────────────────────────
+      authType==="link"&&linkSent
+        ? React.createElement('div',{style:{textAlign:"center",padding:"32px 0"}},
+            React.createElement('div',{style:{fontSize:52,marginBottom:12}},"📬"),
+            React.createElement('div',{style:{fontFamily:"'Lora',serif",fontSize:18,fontWeight:700,marginBottom:8}},"Check your email"),
+            React.createElement('div',{style:{fontSize:14,color:"var(--muted)",lineHeight:1.6,marginBottom:24}},`We sent a sign-in link to `,React.createElement('b',null,email),`. Tap the link in the email — no password needed.`),
+            React.createElement('div',{style:{fontSize:12,color:"var(--muted)",marginBottom:20}},"Didn't get it? Check spam or"),
+            React.createElement('button',{onClick:()=>{setLinkSent(false);setErr("");},style:{fontSize:13,color:"var(--accent)",fontWeight:600,background:"none",border:"none",cursor:"pointer",textDecoration:"underline",fontFamily:"inherit"}},"try a different email")
+          )
+        : authType==="link"
+          ? React.createElement(React.Fragment,null,
+              React.createElement('div',{style:{marginBottom:14}},
+                React.createElement('label',{style:{fontSize:12,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em"}},"Email"),
+                React.createElement('input',inp({type:"email",placeholder:"you@example.com",value:email,onChange:e=>setEmail(e.target.value),onKeyDown:e=>e.key==="Enter"&&handle()}))
+              ),
+              React.createElement('div',{style:{background:"var(--accent-light)",borderRadius:10,padding:"10px 14px",fontSize:12,color:"var(--muted)",marginBottom:16}},"We'll email you a one-time sign-in link. No password required."),
+              err&&React.createElement('div',{style:{background:"#fdf0ed",color:"#c0392b",padding:"11px 14px",borderRadius:10,fontSize:13,marginBottom:16}},err),
+              React.createElement('button',{onClick:handle,disabled:loading,style:{width:"100%",padding:"15px",borderRadius:14,background:"var(--accent)",color:"white",fontSize:16,fontWeight:700,border:"none",cursor:"pointer",opacity:loading?.7:1}},loading?"Sending…":"Send sign-in link →")
+            )
+
+          // ── Password flow ─────────────────────────────────────────────────
+          : React.createElement(React.Fragment,null,
+              mode==="signup"&&React.createElement('div',{style:{marginBottom:14}},
+                React.createElement('label',{style:{fontSize:12,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em"}},"Full Name"),
+                React.createElement('input',inp({placeholder:"Your name",value:name,onChange:e=>setName(e.target.value)}))
+              ),
+              React.createElement('div',{style:{marginBottom:14}},
+                React.createElement('label',{style:{fontSize:12,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em"}},"Email"),
+                React.createElement('input',inp({type:"email",placeholder:"you@example.com",value:email,onChange:e=>setEmail(e.target.value)}))
+              ),
+              React.createElement('div',{style:{marginBottom:20}},
+                React.createElement('label',{style:{fontSize:12,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em"}},"Password"),
+                React.createElement('input',inp({type:"password",placeholder:"Min 6 characters",value:pw,onChange:e=>setPw(e.target.value),onKeyDown:e=>e.key==="Enter"&&handle()}))
+              ),
+              err&&React.createElement('div',{style:{background:"#fdf0ed",color:"#c0392b",padding:"11px 14px",borderRadius:10,fontSize:13,marginBottom:16}},err),
+              React.createElement('button',{onClick:handle,disabled:loading,style:{width:"100%",padding:"15px",borderRadius:14,background:"var(--accent)",color:"white",fontSize:16,fontWeight:700,border:"none",cursor:"pointer",opacity:loading?.7:1}},loading?"Please wait…":mode==="login"?"Log in →":"Create Account →"),
+              React.createElement('div',{style:{textAlign:"center",marginTop:20,fontSize:14,color:"var(--muted)"}},
+                mode==="login"?"Don't have an account? ":"Already have an account? ",
+                React.createElement('button',{onClick:()=>{setMode(m=>m==="login"?"signup":"login");setErr("");},style:{color:"var(--accent)",fontWeight:600,textDecoration:"underline",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit"}},mode==="login"?"Sign up":"Log in")
+              )
+            )
     )
   );
 }
@@ -1035,11 +1183,50 @@ function App() {
   const [showNotif,setShowNotif]=useState(false);
 
   useEffect(()=>{
-    loadAuth().then(auth=>{
-      if(auth?.uid&&auth?.plan){setUser(auth);setScreen("app");}
-      else if(auth?.uid){setUser(auth);setScreen("onboarding");}
-      else setScreen("landing");
+    if(!window.__fb) {
+      // Fallback: localStorage (Firebase not configured)
+      loadAuth().then(auth=>{
+        if(auth?.uid&&auth?.plan){setUser(auth);setScreen("app");}
+        else if(auth?.uid){setUser(auth);setScreen("onboarding");}
+        else setScreen("landing");
+      });
+      return;
+    }
+
+    // Detect email sign-in link in current URL
+    if(window.__fb.auth.isSignInWithEmailLink(location.href)) {
+      const savedEmail=localStorage.getItem('mo:emailForSignIn');
+      if(savedEmail) {
+        // Same device: auto-complete sign-in silently
+        window.__fb.auth.signInWithEmailLink(savedEmail,location.href)
+          .then(()=>{ localStorage.removeItem('mo:emailForSignIn'); history.replaceState({},'',location.pathname); })
+          .catch(e=>console.error('[Auth] Email link error:',e));
+        // Fall through — onAuthStateChanged below will fire on success
+      } else {
+        // Different device: need user to re-enter email
+        window.__pendingLinkUrl=location.href;
+        history.replaceState({},'',location.pathname); // clean URL immediately
+        setScreen("confirmlink");
+        // Still set up listener — it fires after signInWithEmailLink in ConfirmLinkPage
+      }
+    }
+
+    const unsub=window.__fb.auth.onAuthStateChanged(async fbUser=>{
+      if(fbUser) {
+        const profile=await fsGet('users',fbUser.uid);
+        if(profile) {
+          const auth={uid:fbUser.uid,email:fbUser.email,...profile};
+          setUser(auth);
+          setScreen(auth.plan?"app":"onboarding");
+        } else {
+          setUser({uid:fbUser.uid,email:fbUser.email,name:""});
+          setScreen("onboarding");
+        }
+      } else {
+        setScreen(s=>s==="confirmlink"?s:"landing");
+      }
     });
+    return ()=>unsub();
   },[]);
 
   useEffect(()=>{
@@ -1053,6 +1240,7 @@ function App() {
   );
   if(screen==="landing") return React.createElement(LandingPage,{onSignup:()=>{setAuthMode("signup");setScreen("auth");},onLogin:()=>{setAuthMode("login");setScreen("auth");}});
   if(screen==="auth")    return React.createElement(AuthPage,{mode:authMode,onAuth:u=>{setUser(u);setScreen(u.plan?"app":"onboarding");},onBack:()=>setScreen("landing")});
+  if(screen==="confirmlink") return React.createElement(ConfirmLinkPage,{linkUrl:window.__pendingLinkUrl||location.href});
   if(screen==="onboarding") return React.createElement(OnboardingPage,{user,onComplete:u=>{setUser(u);setScreen("app");}});
   // HabitApp stays mounted for "app", "account", and "admin" screens so its
   // state (habits, logs, loaded) is never lost when opening overlaid screens.

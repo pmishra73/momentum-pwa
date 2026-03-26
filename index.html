@@ -30,6 +30,29 @@
   <link rel="icon" type="image/png" sizes="32x32"   href="icons/icon-96.png"/>
   <link rel="shortcut icon"                          href="icons/icon-96.png"/>
 
+  <!-- Firebase (compat SDK v10 — no build step required) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics-compat.js"></script>
+  <script>
+    const FIREBASE_CONFIG = {
+      apiKey:            "AIzaSyBVIdjXUQIVKeIYBYc7UfeFrAugg6ElBF8",
+      authDomain:        "momentum-pwa-15664.firebaseapp.com",
+      projectId:         "momentum-pwa-15664",
+      storageBucket:     "momentum-pwa-15664.firebasestorage.app",
+      messagingSenderId: "690634295523",
+      appId:             "1:690634295523:web:8101c8dd3aa02b45555dd6",
+      measurementId:     "G-89RX5ZTPQY",
+    };
+    firebase.initializeApp(FIREBASE_CONFIG);
+    firebase.analytics();
+    firebase.firestore().enablePersistence({ synchronizeTabs: true })
+      .catch(e => console.warn('[FB] Offline persistence:', e.code));
+    window.__fb = { auth: firebase.auth(), db: firebase.firestore() };
+    console.log('[FB] Firebase ready — cross-device sync enabled');
+  </script>
+
   <!-- PWA Manifest -->
   <link rel="manifest" href="manifest.json"/>
 

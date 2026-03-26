@@ -1,19 +1,19 @@
 // ─── Momentum PWA Service Worker ─────────────────────────────────────────────
-const CACHE_NAME      = 'momentum-v1';
-const DYNAMIC_CACHE   = 'momentum-dynamic-v1';
-const OFFLINE_URL     = '/offline.html';
+const CACHE_NAME      = 'momentum-v2';
+const DYNAMIC_CACHE   = 'momentum-dynamic-v2';
+const BASE            = new URL('./', self.location.href).pathname; // e.g. /momentum-pwa/
+const OFFLINE_URL     = BASE + 'offline.html';
 
 // Files to pre-cache on install (app shell)
 const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
-  '/offline.html',
-  '/app.js',
-  '/styles.css',
-  '/manifest.json',
-  '/install.js',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
+  BASE,
+  BASE + 'index.html',
+  BASE + 'offline.html',
+  BASE + 'app.js',
+  BASE + 'manifest.json',
+  BASE + 'install.js',
+  BASE + 'icons/icon-192.png',
+  BASE + 'icons/icon-512.png',
   'https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap',
   'https://unpkg.com/react@18/umd/react.production.min.js',
   'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
@@ -114,7 +114,7 @@ self.addEventListener('fetch', event => {
 
 // ─── PUSH NOTIFICATIONS ───────────────────────────────────────────────────────
 self.addEventListener('push', event => {
-  let data = { title: 'Momentum', body: "Don't forget your habits today! 🔥", icon: '/icons/icon-192.png', badge: '/icons/icon-96.png', tag: 'momentum-reminder' };
+  let data = { title: 'Momentum', body: "Don't forget your habits today! 🔥", icon: BASE + 'icons/icon-192.png', badge: BASE + 'icons/icon-96.png', tag: 'momentum-reminder' };
 
   if (event.data) {
     try { Object.assign(data, event.data.json()); }
@@ -128,7 +128,7 @@ self.addEventListener('push', event => {
       badge:   data.badge,
       tag:     data.tag,
       vibrate: [200, 100, 200],
-      data:    { url: data.url || '/?view=today' },
+      data:    { url: data.url || (BASE + '?view=today') },
       actions: [
         { action: 'open',    title: '✅ Check habits' },
         { action: 'dismiss', title: 'Later'           }
@@ -141,7 +141,7 @@ self.addEventListener('notificationclick', event => {
   event.notification.close();
   if (event.action === 'dismiss') return;
 
-  const targetUrl = event.notification.data?.url || '/';
+  const targetUrl = event.notification.data?.url || BASE;
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
       for (const client of clientList) {
@@ -171,10 +171,10 @@ self.addEventListener('periodicsync', event => {
     event.waitUntil(
       self.registration.showNotification('Momentum', {
         body:  "Time to check your habits for today 🌿",
-        icon:  '/icons/icon-192.png',
-        badge: '/icons/icon-96.png',
+        icon:  BASE + 'icons/icon-192.png',
+        badge: BASE + 'icons/icon-96.png',
         tag:   'daily-reminder',
-        data:  { url: '/?view=today' }
+        data:  { url: BASE + '?view=today' }
       })
     );
   }

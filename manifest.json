@@ -2,13 +2,13 @@
   "name": "Momentum — Daily Habit Tracker",
   "short_name": "Momentum",
   "description": "Build habits that actually stick. Track daily rituals, streaks, and progress.",
-  "start_url": "/",
+  "start_url": "/momentum-pwa/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#faf7f2",
   "theme_color": "#c4622d",
   "lang": "en",
-  "scope": "/",
+  "scope": "/momentum-pwa/",
   "categories": ["health", "lifestyle", "productivity"],
   "screenshots": [],
   "icons": [
@@ -26,14 +26,14 @@
       "name": "Today's Habits",
       "short_name": "Today",
       "description": "Jump to today's habit checklist",
-      "url": "/?view=today",
+      "url": "/momentum-pwa/?view=today",
       "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
     },
     {
       "name": "Weekly Report",
       "short_name": "Report",
       "description": "View your weekly progress",
-      "url": "/?view=reports",
+      "url": "/momentum-pwa/?view=reports",
       "icons": [{ "src": "icons/icon-96.png", "sizes": "96x96" }]
     }
   ],
