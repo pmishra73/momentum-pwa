@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Momentum — Offline</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;700&family=DM+Sans:wght@400;500&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh; background: #faf7f2;
+      font-family: 'DM Sans', sans-serif; color: #3d3530;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: white; border-radius: 24px; padding: 48px 36px;
+      max-width: 400px; width: 100%; text-align: center;
+      box-shadow: 0 8px 32px rgba(61,53,48,.10);
+    }
+    .icon { font-size: 64px; margin-bottom: 20px; }
+    h1 { font-family: 'Lora', serif; font-size: 26px; font-weight: 700; margin-bottom: 10px; }
+    p  { font-size: 15px; color: #9e8e80; line-height: 1.65; margin-bottom: 28px; }
+    .tip {
+      background: #faf7f2; border: 1px solid #e8d9c4; border-radius: 12px;
+      padding: 14px 18px; font-size: 13px; color: #9e8e80; text-align: left;
+      margin-bottom: 28px; line-height: 1.6;
+    }
+    .tip b { color: #3d3530; }
+    button {
+      padding: 13px 28px; border-radius: 12px; background: #c4622d;
+      color: white; font-size: 15px; font-weight: 700; border: none;
+      cursor: pointer; font-family: inherit; transition: opacity .2s;
+    }
+    button:hover { opacity: .85; }
+    .brand { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 32px; }
+    .brand-dot { font-size: 20px; color: #c4622d; font-weight: 700; font-family: 'Lora', serif; }
+    .brand-name { font-family: 'Lora', serif; font-weight: 700; font-size: 17px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <span class="brand-dot">◆</span>
+      <span class="brand-name">Momentum</span>
+    </div>
+    <div class="icon">📡</div>
+    <h1>You're offline</h1>
+    <p>No internet connection right now. Your habits and data are safe — come back when you're connected.</p>
+    <div class="tip">
+      <b>💡 Tip:</b> Install Momentum on your home screen for full offline access. Tap the browser menu → <b>"Add to Home Screen"</b>.
+    </div>
+    <button onclick="window.location.reload()">Try again</button>
+  </div>
+</body>
+</html>

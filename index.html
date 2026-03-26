@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Momentum"/>
+  <meta name="application-name" content="Momentum"/>
+  <meta name="theme-color" content="#c4622d"/>
+  <meta name="msapplication-TileColor" content="#c4622d"/>
+  <meta name="msapplication-TileImage" content="icons/icon-144.png"/>
+  <meta name="description" content="Build habits that actually stick. Track daily rituals, streaks, and progress."/>
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Momentum — Daily Habit Tracker"/>
+  <meta property="og:description" content="Build habits that actually stick."/>
+  <meta property="og:type" content="website"/>
+  <meta property="og:image" content="icons/icon-512.png"/>
+
+  <!-- Apple touch icons -->
+  <link rel="apple-touch-icon" href="icons/icon-152.png"/>
+  <link rel="apple-touch-icon" sizes="152x152" href="icons/icon-152.png"/>
+  <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192.png"/>
+  <link rel="apple-touch-startup-image" href="icons/icon-512.png"/>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"/>
+  <link rel="icon" type="image/png" sizes="32x32"   href="icons/icon-96.png"/>
+  <link rel="shortcut icon"                          href="icons/icon-96.png"/>
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json"/>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap"/>
+
+  <title>Momentum</title>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --safe-top:    env(safe-area-inset-top,    0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left:   env(safe-area-inset-left,   0px);
+      --safe-right:  env(safe-area-inset-right,  0px);
+    }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: 'DM Sans', 'Helvetica Neue', sans-serif;
+      background: #faf7f2; color: #3d3530;
+      /* Prevent overscroll bounce on iOS */
+      overscroll-behavior: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    #root {
+      height: 100%; display: flex; flex-direction: column;
+    }
+    /* Splash screen */
+    #splash {
+      position: fixed; inset: 0; z-index: 9999;
+      background: #c4622d;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 16px;
+      transition: opacity .4s ease, transform .4s ease;
+    }
+    #splash.hide { opacity: 0; transform: scale(1.05); pointer-events: none; }
+    #splash .logo { font-size: 64px; }
+    #splash .name {
+      font-family: 'Lora', serif; font-size: 32px; font-weight: 700;
+      color: white; letter-spacing: .02em;
+    }
+    #splash .tagline { font-size: 15px; color: rgba(255,255,255,.75); }
+    #splash .loader {
+      width: 40px; height: 4px; background: rgba(255,255,255,.25);
+      border-radius: 2px; overflow: hidden; margin-top: 8px;
+    }
+    #splash .loader-bar {
+      height: 100%; background: white; border-radius: 2px;
+      animation: load 1.4s ease-out forwards;
+    }
+    @keyframes load { from { width: 0% } to { width: 100% } }
+
+    /* Prevent text selection on mobile */
+    button, .no-select { user-select: none; -webkit-user-select: none; }
+
+    /* Tap highlight */
+    * { -webkit-tap-highlight-color: transparent; }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-thumb { background: #e8d9c4; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<!-- Splash Screen -->
+<div id="splash">
+  <div class="logo">◆</div>
+  <div class="name">Momentum</div>
+  <div class="tagline">Build habits that stick</div>
+  <div class="loader"><div class="loader-bar"></div></div>
+</div>
+
+<!-- React App Root -->
+<div id="root"></div>
+
+<!-- React & Babel (swap for Vite/webpack build in production) -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<!-- PWA utilities -->
+<script src="install.js"></script>
+
+<!-- App bundle -->
+<script type="text/babel" src="app.js" data-presets="react"></script>
+
+<script>
+  // Dismiss splash after app loads
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      const s = document.getElementById('splash');
+      if (s) {
+        s.classList.add('hide');
+        setTimeout(() => s.remove(), 450);
+      }
+    }, 1600);
+  });
+</script>
+
+</body>
+</html>
