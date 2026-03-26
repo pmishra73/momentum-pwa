@@ -14,6 +14,8 @@ const DAYS        = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const FULL_DAYS   = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const SCHED_OPTS  = ["Daily","Weekdays","Weekends","Custom"];
 const PERIOD_LABELS = { weekly:"Weekly",fortnightly:"Fortnightly",monthly:"Monthly",quarterly:"Quarterly",halfyearly:"Half-yearly",yearly:"Yearly" };
+const ADMIN_EMAILS  = ["mishraprasant73@gmail.com"];
+const isAdmin       = email => ADMIN_EMAILS.includes((email||"").toLowerCase());
 
 // ─── STORAGE LAYER ────────────────────────────────────────────────────────────
 const idb = (() => {
@@ -362,13 +364,19 @@ function AuthPage({mode:im,onAuth,onBack}) {
     if(mode==="login"){
       const u=users[email.toLowerCase()];
       if(!u||u.password!==btoa(pw)){setErr("Invalid email or password.");setLoading(false);return;}
-      await saveAuth({uid:u.uid,email:u.email,name:u.name,plan:u.plan,billing:u.billing});
-      onAuth(u);
+      const admin=isAdmin(u.email);
+      const finalU=admin?{...u,plan:"cloud",role:"admin"}:u;
+      if(admin&&u.plan!=="cloud"){users[email.toLowerCase()]=finalU;await saveUsers(users);}
+      await saveAuth({uid:finalU.uid,email:finalU.email,name:finalU.name,plan:finalU.plan,billing:finalU.billing,role:finalU.role});
+      onAuth(finalU);
     } else {
       if(users[email.toLowerCase()]){setErr("Email already registered.");setLoading(false);return;}
       const uid=`u_${Date.now()}`;
-      const u={uid,email:email.toLowerCase(),name:name.trim(),password:btoa(pw),plan:null,billing:"monthly"};
-      users[email.toLowerCase()]=u; await saveUsers(users); onAuth(u);
+      const admin=isAdmin(email.toLowerCase());
+      const u={uid,email:email.toLowerCase(),name:name.trim(),password:btoa(pw),plan:admin?"cloud":null,billing:"monthly",role:admin?"admin":undefined,joinedAt:todayStr()};
+      users[email.toLowerCase()]=u; await saveUsers(users);
+      if(admin) await saveAuth({uid:u.uid,email:u.email,name:u.name,plan:u.plan,billing:u.billing,role:u.role});
+      onAuth(u);
     }
     setLoading(false);
   };
@@ -412,10 +420,12 @@ function OnboardingPage({user,onComplete}) {
   const [ac,setAc]=useState(false);
   const proceed=async()=>{
     if(plan==="free"&&(!dc||!ac)) return;
+    const admin=isAdmin(user.email);
+    const finalPlan=admin?"cloud":plan;
     const users=await loadUsers();
-    const u={...users[user.email],plan,billing};
-    users[user.email]=u; await saveUsers(users); await saveAuth({...user,plan,billing});
-    onComplete({...user,plan,billing});
+    const u={...users[user.email],plan:finalPlan,billing,role:admin?"admin":undefined,joinedAt:users[user.email]?.joinedAt||todayStr()};
+    users[user.email]=u; await saveUsers(users); await saveAuth({...user,plan:finalPlan,billing,role:u.role});
+    onComplete({...user,plan:finalPlan,billing,role:u.role});
   };
   const pl=(p)=>{ const P=PRICING[p]; return p==="free"?"Free forever":billing==="monthly"?`$${P.monthly}/mo`:`$${P.yearly}/yr`; };
   const PLANS=[
@@ -524,8 +534,58 @@ function LandingPage({onSignup,onLogin}) {
   );
 }
 
+// ─── ADMIN PANEL ──────────────────────────────────────────────────────────────
+function AdminPanel({onClose}) {
+  const [users,setUsers]=useState({});
+  useEffect(()=>{ loadUsers().then(u=>setUsers(u||{})); },[]);
+
+  const list=Object.values(users).sort((a,b)=>(b.joinedAt||"").localeCompare(a.joinedAt||""));
+  const counts=list.reduce((a,u)=>{const p=u.plan||"none";a[p]=(a[p]||0)+1;return a;},{});
+  const PC={free:"#81b29a",local:"#c4a882",cloud:"#c4622d",none:"#b5b5a9"};
+  const PE={free:"🌱",local:"💾",cloud:"☁️",none:"—"};
+
+  return React.createElement('div',{style:{background:"#faf7f2",minHeight:"100%",paddingBottom:"calc(24px + env(safe-area-inset-bottom))"}},
+    React.createElement('div',{style:{display:"flex",alignItems:"center",gap:12,padding:"calc(16px + env(safe-area-inset-top)) 18px 16px",background:"white",borderBottom:"1px solid #ede8e0",position:"sticky",top:0,zIndex:10}},
+      React.createElement('button',{onClick:onClose,style:{fontSize:22,color:"var(--muted)",background:"none",border:"none",cursor:"pointer",lineHeight:1,marginRight:4}},"←"),
+      React.createElement('div',{style:{flex:1}},
+        React.createElement('div',{style:{fontFamily:"'Lora',serif",fontWeight:700,fontSize:17}},"Admin Panel"),
+        React.createElement('div',{style:{fontSize:12,color:"var(--muted)"}},`${list.length} registered user${list.length!==1?"s":""}`)
+      ),
+      React.createElement('span',{style:{fontSize:18}},"🛡️")
+    ),
+    React.createElement('div',{style:{padding:"16px"}},
+      React.createElement('div',{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}},
+        [["cloud","☁️ Cloud"],["local","💾 Local"],["free","🌱 Free"]].map(([p,l])=>
+          React.createElement('div',{key:p,style:{background:"white",borderRadius:12,padding:"12px",textAlign:"center",border:`1.5px solid ${PC[p]}33`}},
+            React.createElement('div',{style:{fontSize:22,fontWeight:700,color:PC[p]}},(counts[p]||0)),
+            React.createElement('div',{style:{fontSize:11,color:"var(--muted)",marginTop:2}},l)
+          )
+        )
+      ),
+      list.length===0
+        ? React.createElement('div',{style:{textAlign:"center",padding:"32px",color:"var(--muted)",fontSize:14}},"No users yet.")
+        : list.map(u=>React.createElement('div',{key:u.uid,style:{background:"white",borderRadius:14,padding:"14px 16px",marginBottom:10,border:"1px solid #ede8e0"}},
+            React.createElement('div',{style:{display:"flex",alignItems:"center",gap:10}},
+              React.createElement('div',{style:{width:36,height:36,borderRadius:"50%",background:`${PC[u.plan||"none"]}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}},PE[u.plan||"none"]),
+              React.createElement('div',{style:{flex:1,minWidth:0}},
+                React.createElement('div',{style:{fontWeight:600,fontSize:14,display:"flex",alignItems:"center",gap:6}},
+                  u.name||"—",
+                  u.role==="admin"&&React.createElement('span',{style:{fontSize:10,background:"#c4622d",color:"white",borderRadius:20,padding:"1px 7px",fontWeight:700}},"ADMIN")
+                ),
+                React.createElement('div',{style:{fontSize:12,color:"var(--muted)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},u.email)
+              ),
+              React.createElement('div',{style:{textAlign:"right",flexShrink:0}},
+                React.createElement('div',{style:{fontSize:12,fontWeight:600,color:PC[u.plan||"none"]}},PRICING[u.plan]?.label||"No plan"),
+                React.createElement('div',{style:{fontSize:11,color:"var(--muted)"}},u.joinedAt||"—")
+              )
+            )
+          ))
+    )
+  );
+}
+
 // ─── ACCOUNT PAGE ─────────────────────────────────────────────────────────────
-function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications}) {
+function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenAdmin}) {
   const [billing,setBilling]=useState(user.billing||"monthly");
   const [saved,setSaved]=useState(false);
   const PC={free:"#81b29a",local:"#c4a882",cloud:"#c4622d"};
@@ -592,6 +652,12 @@ function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications}) {
           React.createElement('ul',{style:{fontSize:12,color:"var(--muted)",paddingLeft:16,lineHeight:1.8}},
             ["Habit names, categories & completion patterns","Usage frequency","Ad interaction data"].map(i=>React.createElement('li',{key:i},i))
           )
+        )
+      ),
+      isAdmin(user.email)&&React.createElement(Section,{title:"Admin"},
+        React.createElement('button',{onClick:onOpenAdmin,style:{width:"100%",padding:"11px",borderRadius:12,background:"#f5ede0",fontSize:14,fontWeight:600,border:"none",cursor:"pointer",textAlign:"left",fontFamily:"inherit",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+          React.createElement('span',null,"🛡️ Admin Panel"),
+          React.createElement('span',{style:{color:"var(--muted)"}},"›")
         )
       ),
       React.createElement(Section,{title:"Account Actions"},
@@ -956,9 +1022,10 @@ function App() {
   if(screen==="auth")    return React.createElement(AuthPage,{mode:authMode,onAuth:u=>{setUser(u);setScreen(u.plan?"app":"onboarding");},onBack:()=>setScreen("landing")});
   if(screen==="onboarding") return React.createElement(OnboardingPage,{user,onComplete:u=>{setUser(u);setScreen("app");}});
   if(screen==="account") return React.createElement('div',{style:{height:"100%",overflowY:"auto"}},
-    React.createElement(AccountPage,{user,onClose:()=>setScreen("app"),onLogout:async()=>{await clearAuth();setUser(null);setScreen("landing");},onPlanChange:u=>{setUser(u);setScreen("app");},onNotifications:()=>setShowNotif(true)}),
+    React.createElement(AccountPage,{user,onClose:()=>setScreen("app"),onLogout:async()=>{await clearAuth();setUser(null);setScreen("landing");},onPlanChange:u=>{setUser(u);setScreen("app");},onNotifications:()=>setShowNotif(true),onOpenAdmin:()=>setScreen("admin")}),
     showNotif&&React.createElement(NotificationSettings,{onClose:()=>setShowNotif(false)})
   );
+  if(screen==="admin") return React.createElement(AdminPanel,{onClose:()=>setScreen("account")});
   if(screen==="app") return React.createElement(HabitApp,{user,onLogout:async()=>{await clearAuth();setUser(null);setScreen("landing");},onOpenAccount:()=>setScreen("account"),onPlanChange:u=>setUser(u)});
   return null;
 }
