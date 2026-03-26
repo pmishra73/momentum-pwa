@@ -57,28 +57,66 @@ const idb = (() => {
   };
 })();
 
-const serverStore = {
-  async get(k) {
-    try { const r=await window.storage.get(k); return r?JSON.parse(r.value):null; }
-    catch { try { const v=localStorage.getItem(k); return v?JSON.parse(v):null; } catch { return null; } }
-  },
-  async set(k,v) {
-    try { await window.storage.set(k,JSON.stringify(v)); }
-    catch { try { localStorage.setItem(k,JSON.stringify(v)); } catch {} }
-  },
-  async del(k) {
-    try { await window.storage.delete(k); }
-    catch { try { localStorage.removeItem(k); } catch {} }
-  },
+// ─── localStorage fallback (when Firebase not configured) ─────────────────────
+const ls = {
+  get: k => { try { const v=localStorage.getItem(k); return Promise.resolve(v?JSON.parse(v):null); } catch { return Promise.resolve(null); } },
+  set: (k,v) => { try { localStorage.setItem(k,JSON.stringify(v)); } catch {} return Promise.resolve(); },
+  del: k => { try { localStorage.removeItem(k); } catch {} return Promise.resolve(); },
 };
-const getStore   = plan => plan==="local" ? idb : serverStore;
-const loadUD     = (uid,plan) => getStore(plan).get(`mo:${uid}:data`);
-const saveUD     = (uid,plan,d) => getStore(plan).set(`mo:${uid}:data`,d);
-const loadAuth   = () => serverStore.get('mo:auth');
-const saveAuth   = a => serverStore.set('mo:auth',a);
-const clearAuth  = () => serverStore.del('mo:auth');
-const loadUsers  = () => serverStore.get('mo:users').then(u=>u||{});
-const saveUsers  = u => serverStore.set('mo:users',u);
+
+// ─── Firestore helpers ─────────────────────────────────────────────────────────
+const fsGet    = async (col,id) => { try { const s=await window.__fb.db.collection(col).doc(id).get(); return s.exists?s.data():null; } catch { return null; } };
+const fsSet    = async (col,id,data,merge=true) => { try { await window.__fb.db.collection(col).doc(id).set(data,{merge}); return true; } catch(e) { console.error('[FB] write failed:',e); return false; } };
+const fsGetAll = async (col) => { try { const s=await window.__fb.db.collection(col).get(); const r={}; s.forEach(d=>{r[d.id]=d.data();}); return r; } catch { return {}; } };
+
+// ─── User habit data ───────────────────────────────────────────────────────────
+// "local" plan → IndexedDB (device-only, by design)
+// "free" / "cloud" plan → Firestore (cross-device) with localStorage fallback
+const loadUD = async (uid,plan) => {
+  if (plan==="local") return idb.get(`mo:${uid}:data`);
+  if (window.__fb) { const d=await fsGet('userdata',uid); return d; }
+  return ls.get(`mo:${uid}:data`);
+};
+const saveUD = async (uid,plan,d) => {
+  if (plan==="local") return idb.set(`mo:${uid}:data`,d);
+  if (window.__fb) { await fsSet('userdata',uid,d,false); return; }
+  return ls.set(`mo:${uid}:data`,d);
+};
+
+// ─── Auth ──────────────────────────────────────────────────────────────────────
+// When Firebase is configured, session is managed by Firebase Auth (onAuthStateChanged).
+// loadAuth() is only used as a fallback path when Firebase is not available.
+const loadAuth  = () => window.__fb ? Promise.resolve(null) : ls.get('mo:auth');
+const saveAuth  = async a => {
+  if (window.__fb) { const {uid,...p}=a; const {password:_,...safe}=p; await fsSet('users',uid,safe); return; }
+  return ls.set('mo:auth',a);
+};
+const clearAuth = async () => {
+  if (window.__fb) { await window.__fb.auth.signOut(); return; }
+  return ls.del('mo:auth');
+};
+
+// ─── User registry (admin panel) ──────────────────────────────────────────────
+const loadUsers = async () => {
+  if (window.__fb) {
+    const all=await fsGetAll('users');
+    const byEmail={};
+    Object.entries(all).forEach(([uid,p])=>{ byEmail[p.email]={uid,...p}; });
+    return byEmail;
+  }
+  return ls.get('mo:users').then(u=>u||{});
+};
+const saveUsers = async u => {
+  if (window.__fb) {
+    await Promise.all(Object.values(u).map(async user=>{
+      if (!user.uid) return;
+      const {password:_,...safe}=user;
+      await fsSet('users',user.uid,safe);
+    }));
+    return;
+  }
+  return ls.set('mo:users',u);
+};
 
 // ─── DATE HELPERS ─────────────────────────────────────────────────────────────
 const todayStr = () => new Date().toISOString().split("T")[0];
@@ -383,6 +421,33 @@ function AuthPage({mode:im,onAuth,onBack}) {
     if(mode==="signup"&&!name.trim()) return setErr("Please enter your name.");
     if(pw.length<6) return setErr("Password must be 6+ characters.");
     setLoading(true); setErr("");
+
+    // ── Firebase Auth path ────────────────────────────────────────────────────
+    if(window.__fb) {
+      try {
+        if(mode==="login") {
+          const cred=await window.__fb.auth.signInWithEmailAndPassword(email.trim(),pw);
+          const profile=await fsGet('users',cred.user.uid);
+          if(!profile){setErr("Account profile not found. Please sign up.");setLoading(false);return;}
+          const admin=isAdmin(cred.user.email);
+          const finalP=admin?{...profile,plan:"cloud",role:"admin"}:profile;
+          if(admin&&profile.plan!=="cloud") await fsSet('users',cred.user.uid,{plan:"cloud",role:"admin"});
+          onAuth({uid:cred.user.uid,email:cred.user.email,...finalP});
+        } else {
+          const cred=await window.__fb.auth.createUserWithEmailAndPassword(email.trim(),pw);
+          const admin=isAdmin(email.trim().toLowerCase());
+          const profile={email:email.trim().toLowerCase(),name:name.trim(),plan:admin?"cloud":null,billing:"monthly",role:admin?"admin":undefined,joinedAt:todayStr()};
+          await fsSet('users',cred.user.uid,profile,false);
+          onAuth({uid:cred.user.uid,...profile});
+        }
+      } catch(e) {
+        const msgs={'auth/email-already-in-use':'Email already registered.','auth/user-not-found':'No account with that email.','auth/wrong-password':'Incorrect password.','auth/invalid-email':'Invalid email address.','auth/too-many-requests':'Too many attempts. Try again later.','auth/invalid-credential':'Invalid email or password.'};
+        setErr(msgs[e.code]||e.message||"Something went wrong.");
+      }
+      setLoading(false); return;
+    }
+
+    // ── localStorage fallback (Firebase not configured) ───────────────────────
     const users=await loadUsers();
     if(mode==="login"){
       const u=users[email.toLowerCase()];
@@ -1035,6 +1100,28 @@ function App() {
   const [showNotif,setShowNotif]=useState(false);
 
   useEffect(()=>{
+    if(window.__fb) {
+      // Firebase: onAuthStateChanged fires automatically on every device/session
+      const unsub=window.__fb.auth.onAuthStateChanged(async fbUser=>{
+        if(fbUser) {
+          const profile=await fsGet('users',fbUser.uid);
+          if(profile) {
+            const auth={uid:fbUser.uid,email:fbUser.email,...profile};
+            setUser(auth);
+            setScreen(auth.plan?"app":"onboarding");
+          } else {
+            // Profile not yet written (rare race on first signup)
+            setUser({uid:fbUser.uid,email:fbUser.email,name:""});
+            setScreen("onboarding");
+          }
+        } else {
+          setUser(null);
+          setScreen("landing");
+        }
+      });
+      return ()=>unsub();
+    }
+    // Fallback: localStorage (Firebase not configured)
     loadAuth().then(auth=>{
       if(auth?.uid&&auth?.plan){setUser(auth);setScreen("app");}
       else if(auth?.uid){setUser(auth);setScreen("onboarding");}
