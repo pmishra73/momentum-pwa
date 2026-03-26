@@ -71,16 +71,23 @@ const fsGetAll = async (col) => { try { const s=await window.__fb.db.collection(
 
 // ─── User habit data ───────────────────────────────────────────────────────────
 // "local" plan → IndexedDB (device-only, by design)
-// "free" / "cloud" plan → Firestore (cross-device) with localStorage fallback
+// "free" / "cloud" plan → localStorage (instant, always works) + Firestore (cross-device sync)
 const loadUD = async (uid,plan) => {
   if (plan==="local") return idb.get(`mo:${uid}:data`);
-  if (window.__fb) { const d=await fsGet('userdata',uid); return d; }
-  return ls.get(`mo:${uid}:data`);
+  // Cloud/free: try Firestore first for freshest cross-device data
+  if (window.__fb) {
+    const d = await fsGet('userdata',uid);
+    if (d) { ls.set(`mo:ud:${uid}`,d); return d; } // cache locally for offline use
+  }
+  // Firestore unavailable or empty — use local cache
+  return ls.get(`mo:ud:${uid}`);
 };
 const saveUD = async (uid,plan,d) => {
   if (plan==="local") return idb.set(`mo:${uid}:data`,d);
-  if (window.__fb) { await fsSet('userdata',uid,d,false); return; }
-  return ls.set(`mo:${uid}:data`,d);
+  // Always persist locally first (instant, survives network failures & deployments)
+  await ls.set(`mo:ud:${uid}`,d);
+  // Then async-sync to Firestore for cross-device access (non-blocking)
+  if (window.__fb) fsSet('userdata',uid,d,false).catch(e=>console.warn('[FB] sync failed:',e));
 };
 
 // ─── Auth ──────────────────────────────────────────────────────────────────────
@@ -88,7 +95,12 @@ const saveUD = async (uid,plan,d) => {
 // loadAuth() is only used as a fallback path when Firebase is not available.
 const loadAuth  = () => window.__fb ? Promise.resolve(null) : ls.get('mo:auth');
 const saveAuth  = async a => {
-  if (window.__fb) { const {uid,...p}=a; const {password:_,...safe}=p; await fsSet('users',uid,safe); return; }
+  if (window.__fb) {
+    const {uid,...p}=a; const {password:_,...safe}=p;
+    await ls.set(`mo:prof:${uid}`,safe); // always save locally
+    fsSet('users',uid,safe).catch(e=>console.warn('[FB] profile sync failed:',e));
+    return;
+  }
   return ls.set('mo:auth',a);
 };
 const clearAuth = async () => {
@@ -1213,8 +1225,12 @@ function App() {
 
     const unsub=window.__fb.auth.onAuthStateChanged(async fbUser=>{
       if(fbUser) {
-        const profile=await fsGet('users',fbUser.uid);
+        // Try Firestore first; fall back to locally-cached profile if Firestore is unreachable
+        let profile=await fsGet('users',fbUser.uid);
+        if(!profile) profile=await ls.get(`mo:prof:${fbUser.uid}`);
         if(profile) {
+          // Keep local cache fresh
+          ls.set(`mo:prof:${fbUser.uid}`,profile);
           const auth={uid:fbUser.uid,email:fbUser.email,...profile};
           setUser(auth);
           setScreen(auth.plan?"app":"onboarding");
