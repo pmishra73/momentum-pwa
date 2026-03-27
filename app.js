@@ -715,7 +715,6 @@ function AdminPanel({onClose}) {
   const [inviteMsg,setInviteMsg]=useState("");
   const [inviteErr,setInviteErr]=useState("");
   const [inviteLoading,setInviteLoading]=useState(false);
-  const [confirmDel,setConfirmDel]=useState(null);
   useEffect(()=>{ loadUsers().then(u=>setUsers(u||{})); },[]);
   const list=Object.values(users).sort((a,b)=>(b.joinedAt||"").localeCompare(a.joinedAt||""));
 
@@ -733,17 +732,6 @@ function AdminPanel({onClose}) {
       setInviteErr(msgs[e.code]||e.message||"Failed to send.");
     }
     setInviteLoading(false);
-  };
-
-  const removeUser=async(uid)=>{
-    try {
-      if(window.__fb) {
-        await window.__fb.db.collection('users').doc(uid).delete();
-        await window.__fb.db.collection('userdata').doc(uid).delete().catch(()=>{});
-      }
-      setUsers(prev=>{ const n={...prev}; Object.keys(n).forEach(k=>{ if(n[k].uid===uid) delete n[k]; }); return n; });
-    } catch(e) { console.error('[Admin] remove failed:',e); }
-    setConfirmDel(null);
   };
 
   const inpStyle={width:"100%",padding:"11px 13px",border:"1.5px solid var(--border)",borderRadius:12,fontSize:14,outline:"none",background:"var(--bg)",color:"var(--ink)",fontFamily:"inherit",boxSizing:"border-box"};
@@ -796,19 +784,7 @@ function AdminPanel({onClose}) {
                 u.dob&&React.createElement('div',{style:{fontSize:11,color:"var(--muted)"}},`DOB: ${u.dob}`),
                 u.gender&&React.createElement('div',{style:{fontSize:11,color:"var(--muted)"}},`Gender: ${u.gender}`)
               ),
-              React.createElement('div',{style:{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}},
-                React.createElement('div',{style:{fontSize:11,color:"var(--muted)"}},u.joinedAt||"—"),
-                !isAdmin(u.email)&&React.createElement('button',{
-                  onClick:()=>setConfirmDel(confirmDel===u.uid?null:u.uid),
-                  style:{padding:"3px 10px",borderRadius:8,border:"1.5px solid var(--border)",fontSize:11,fontWeight:600,background:confirmDel===u.uid?"var(--accent)":"var(--card)",color:confirmDel===u.uid?"white":"var(--accent)",cursor:"pointer",fontFamily:"inherit"}},"Remove")
-              )
-            ),
-            // Confirm delete row
-            confirmDel===u.uid&&React.createElement('div',{style:{marginTop:10,padding:"10px 12px",background:"var(--accent-light)",borderRadius:10,display:"flex",alignItems:"center",gap:10}},
-              React.createElement('span',{style:{fontSize:12,color:"var(--ink)",flex:1}},"Remove this account? Their data will be deleted."),
-              React.createElement('button',{onClick:()=>removeUser(u.uid),style:{padding:"5px 12px",borderRadius:8,background:"var(--accent)",color:"white",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit"}},"Confirm"),
-              React.createElement('button',{onClick:()=>setConfirmDel(null),style:{padding:"5px 10px",borderRadius:8,background:"var(--card)",color:"var(--muted)",fontSize:12,border:"1px solid var(--border)",cursor:"pointer",fontFamily:"inherit"}},"Cancel")
-            )
+              React.createElement('div',{style:{fontSize:11,color:"var(--muted)",flexShrink:0}},u.joinedAt||"—")
           ))
     )
   );
