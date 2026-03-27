@@ -791,29 +791,32 @@ function AdminPanel({onClose}) {
 }
 
 // ─── ACCOUNT PAGE ─────────────────────────────────────────────────────────────
+// Section must be at module scope — defining it inside AccountPage causes React
+// to remount children (including inputs) on every render, losing focus.
+function AccountSection({title,children}) {
+  return React.createElement('div',{style:{background:"var(--card)",borderRadius:16,padding:"18px 18px",marginBottom:12}},
+    React.createElement('div',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",marginBottom:12}},title),
+    children
+  );
+}
+
 function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenAdmin}) {
   const [curTheme,setCurTheme]=useState(localStorage.getItem('mo:theme')||'light');
   const [editProfile,setEditProfile]=useState(false);
   const [pName,setPName]=useState(user.name||"");
   const [pDob,setPDob]=useState(user.dob||"");
-  const [pHeight,setPHeight]=useState(user.height||"");
   const [pGender,setPGender]=useState(user.gender||"");
   const [profileSaved,setProfileSaved]=useState(false);
   const changeTheme=name=>{setCurTheme(name);applyTheme(name);localStorage.setItem('mo:theme',name);};
   const saveProfile=async()=>{
     if(!pName.trim()) return;
-    const updated={...user,name:pName.trim(),dob:pDob,height:pHeight,gender:pGender};
+    const updated={...user,name:pName.trim(),dob:pDob,gender:pGender};
     await saveAuth(updated);
     onPlanChange(updated);
     setEditProfile(false);
     setProfileSaved(true); setTimeout(()=>setProfileSaved(false),2000);
   };
   const inp={style:{width:"100%",padding:"10px 13px",border:"1.5px solid var(--border)",borderRadius:10,fontSize:14,outline:"none",background:"var(--bg)",color:"var(--ink)",fontFamily:"inherit",boxSizing:"border-box",marginBottom:10}};
-
-  const Section=({title,children})=>React.createElement('div',{style:{background:"var(--card)",borderRadius:16,padding:"18px 18px",marginBottom:12}},
-    React.createElement('div',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",marginBottom:12}},title),
-    children
-  );
 
   return React.createElement('div',{style:{background:"var(--bg)",minHeight:"100%",overflowY:"auto",paddingBottom:"calc(24px + env(safe-area-inset-bottom))"}},
     React.createElement('div',{style:{display:"flex",alignItems:"center",gap:12,padding:"calc(16px + env(safe-area-inset-top)) 18px 16px",background:"var(--card)",borderBottom:"1px solid var(--border)",position:"sticky",top:0,zIndex:10}},
@@ -824,15 +827,13 @@ function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenA
       )
     ),
     React.createElement('div',{style:{padding:"16px 16px 0"}},
-      React.createElement(Section,{title:"Profile"},
+      React.createElement(AccountSection,{title:"Profile"},
         editProfile
           ? React.createElement('div',null,
               React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:4}},"Full Name *"),
               React.createElement('input',{...inp,placeholder:"Your name",value:pName,onChange:e=>setPName(e.target.value)}),
               React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:4}},"Date of Birth"),
-              React.createElement('input',{...inp,type:"date",value:pDob,onChange:e=>setPDob(e.target.value),style:{...inp.style,colorScheme:"dark light"}}),
-              React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:4}},"Height"),
-              React.createElement('input',{...inp,placeholder:"e.g. 5'10\" or 178 cm",value:pHeight,onChange:e=>setPHeight(e.target.value)}),
+              React.createElement('input',{type:"date",value:pDob,onChange:e=>setPDob(e.target.value),style:{...inp.style,colorScheme:"dark light"}}),
               React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:8}},"Gender"),
               React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}},
                 GENDERS.map(g=>React.createElement('button',{key:g,onClick:()=>setPGender(pGender===g?"":g),style:{padding:"6px 13px",borderRadius:20,fontSize:12,border:`1.5px solid ${pGender===g?"var(--accent)":"var(--border)"}`,background:pGender===g?"var(--accent)":"var(--card)",color:pGender===g?"white":"var(--ink)",fontFamily:"inherit",cursor:"pointer"}},g))
@@ -847,7 +848,6 @@ function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenA
                 React.createElement('div',null,
                   React.createElement('div',{style:{fontWeight:600,fontSize:15,marginBottom:2}},user.name||React.createElement('span',{style:{color:"var(--muted)",fontStyle:"italic"}},"No name set")),
                   user.dob&&React.createElement('div',{style:{fontSize:12,color:"var(--muted)"}},`DOB: ${user.dob}`),
-                  user.height&&React.createElement('div',{style:{fontSize:12,color:"var(--muted)"}},`Height: ${user.height}`),
                   user.gender&&React.createElement('div',{style:{fontSize:12,color:"var(--muted)"}},`Gender: ${user.gender}`)
                 ),
                 React.createElement('button',{onClick:()=>setEditProfile(true),style:{padding:"6px 14px",borderRadius:10,background:"var(--accent-light)",color:"var(--accent)",fontSize:12,fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit"}},"Edit")
@@ -855,13 +855,13 @@ function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenA
               profileSaved&&React.createElement('div',{style:{fontSize:12,color:"var(--accent)",fontWeight:600,marginTop:6}},"✓ Profile saved!")
             )
       ),
-      React.createElement(Section,{title:"Notifications"},
+      React.createElement(AccountSection,{title:"Notifications"},
         React.createElement('button',{onClick:onNotifications,style:{width:"100%",padding:"11px",borderRadius:12,background:"var(--accent-light)",fontSize:14,fontWeight:600,border:"none",cursor:"pointer",textAlign:"left",fontFamily:"inherit",display:"flex",justifyContent:"space-between",alignItems:"center"}},
           React.createElement('span',null,"🔔 Manage Notifications"),
           React.createElement('span',{style:{color:"var(--muted)"}},"›")
         )
       ),
-      React.createElement(Section,{title:"Appearance"},
+      React.createElement(AccountSection,{title:"Appearance"},
         React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:8}},
           Object.entries(THEMES).map(([k,t])=>React.createElement('button',{key:k,onClick:()=>changeTheme(k),style:{display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"10px 12px",borderRadius:14,border:`2px solid ${curTheme===k?t.accent:"transparent"}`,background:t.bg,cursor:"pointer",minWidth:66,transition:"all .15s",outline:"none"}},
             React.createElement('div',{style:{fontSize:22}},t.emoji),
@@ -869,13 +869,13 @@ function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenA
           ))
         )
       ),
-      isAdmin(user.email)&&React.createElement(Section,{title:"Admin"},
+      isAdmin(user.email)&&React.createElement(AccountSection,{title:"Admin"},
         React.createElement('button',{onClick:onOpenAdmin,style:{width:"100%",padding:"11px",borderRadius:12,background:"var(--accent-light)",fontSize:14,fontWeight:600,border:"none",cursor:"pointer",textAlign:"left",fontFamily:"inherit",display:"flex",justifyContent:"space-between",alignItems:"center"}},
           React.createElement('span',null,"🛡️ Admin Panel"),
           React.createElement('span',{style:{color:"var(--muted)"}},"›")
         )
       ),
-      React.createElement(Section,{title:"Account Actions"},
+      React.createElement(AccountSection,{title:"Account Actions"},
         React.createElement('button',{onClick:onLogout,style:{width:"100%",padding:"13px",borderRadius:12,background:"var(--accent-light)",color:"var(--accent)",fontSize:14,fontWeight:700,border:"1px solid #f5c6bb",cursor:"pointer",fontFamily:"inherit"}},"Log out")
       )
     )
