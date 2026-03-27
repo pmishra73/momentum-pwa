@@ -12,6 +12,23 @@ const SCHED_OPTS  = ["Daily","Weekdays","Weekends","Custom"];
 const PERIOD_LABELS = { weekly:"Weekly",fortnightly:"Fortnightly",monthly:"Monthly",quarterly:"Quarterly",halfyearly:"Half-yearly",yearly:"Yearly" };
 const ADMIN_EMAILS  = ["mishraprasant73@gmail.com"];
 const isAdmin       = email => ADMIN_EMAILS.includes((email||"").toLowerCase());
+const QUOTES = [
+  {q:"We are what we repeatedly do. Excellence is not an act, but a habit.",a:"Aristotle"},
+  {q:"Motivation gets you started. Habit keeps you going.",a:"Jim Ryun"},
+  {q:"Small daily improvements lead to staggering long-term results.",a:"Robin Sharma"},
+  {q:"You don't rise to your goals — you fall to your systems.",a:"James Clear"},
+  {q:"Success is the sum of small efforts, repeated day in and day out.",a:"Robert Collier"},
+  {q:"The secret of your future is hidden in your daily routine.",a:"Mike Murdock"},
+  {q:"Discipline is choosing what you want most over what you want now.",a:"Augusta F. Kantra"},
+  {q:"You'll never change your life until you change something you do daily.",a:"John C. Maxwell"},
+  {q:"The chains of habit are too light to feel until they're too heavy to break.",a:"Warren Buffett"},
+  {q:"First forget inspiration. Habit is more dependable.",a:"Octavia Butler"},
+  {q:"Consistency is the key. If you can't be consistent, you can't be anything.",a:"Tony Gaskins"},
+  {q:"A year from now you'll wish you had started today.",a:"Karen Lamb"},
+  {q:"Your habits will determine your future.",a:"Jack Canfield"},
+  {q:"You are what you do repeatedly — not what you intend to do.",a:"Will Durant"},
+  {q:"The difference between who you are and who you want to be is what you do.",a:"Unknown"},
+];
 const GENDERS       = ["Male","Female","Non-binary","Prefer not to say"];
 
 // ─── THEMES ───────────────────────────────────────────────────────────────────
@@ -167,6 +184,38 @@ function reportDates(period) {
   return dates;
 }
 
+// Aggregate daily habit data into bars for the trend chart
+function trendData(habits, logs, rdates) {
+  if (rdates.length <= 14) {
+    return rdates.map(d => {
+      const hs = habits.filter(h => habitOn(h, d));
+      if (!hs.length) return {label: new Date(d+"T00:00:00").toLocaleDateString("en-US",{weekday:"short"}), pct: null};
+      const done = hs.filter(h => logs[h.id]?.dates?.[d]?.done).length;
+      return {label: new Date(d+"T00:00:00").toLocaleDateString("en-US",{weekday:"short"}), pct: Math.round(done/hs.length*100)};
+    });
+  }
+  if (rdates.length <= 31) {
+    const result = [];
+    for (let i = 0; i < rdates.length; i += 7) {
+      const chunk = rdates.slice(i, i+7);
+      let tot = 0, dn = 0;
+      chunk.forEach(d => habits.filter(h=>habitOn(h,d)).forEach(h => { tot++; if(logs[h.id]?.dates?.[d]?.done) dn++; }));
+      result.push({label:`W${Math.floor(i/7)+1}`, pct: tot ? Math.round(dn/tot*100) : null});
+    }
+    return result;
+  }
+  const byMonth = {};
+  rdates.forEach(d => {
+    const key = d.slice(0,7);
+    if (!byMonth[key]) byMonth[key] = {tot:0, dn:0};
+    habits.filter(h=>habitOn(h,d)).forEach(h => { byMonth[key].tot++; if(logs[h.id]?.dates?.[d]?.done) byMonth[key].dn++; });
+  });
+  return Object.entries(byMonth).map(([k,v]) => ({
+    label: new Date(k+"-01T00:00:00").toLocaleDateString("en-US",{month:"short"}),
+    pct: v.tot ? Math.round(v.dn/v.tot*100) : null
+  }));
+}
+
 // ─── TINY ATOMS ───────────────────────────────────────────────────────────────
 const Ring = ({pct,color,size=44}) => {
   if(pct===null) return null;
@@ -178,6 +227,39 @@ const Ring = ({pct,color,size=44}) => {
   );
 };
 
+// SVG bar chart for trends — used in-app and in PDF export
+function TrendChart({data, color}) {
+  const W=26, barH=42, totalH=62, n=data.length;
+  if (!n) return null;
+  return React.createElement('div',{style:{overflowX:"auto",overflowY:"visible",marginTop:4}},
+    React.createElement('svg',{
+      viewBox:`0 0 ${n*W} ${totalH}`,
+      style:{display:"block",width:Math.max(n*W,200),height:totalH,minWidth:"100%"},
+    },
+      data.map((d,i) => {
+        const pct = d.pct !== null ? d.pct : 0;
+        const h = Math.round((pct/100)*barH);
+        const y = barH - h + 10;
+        const fill = d.pct !== null ? (pct > 0 ? color : "var(--border)") : "none";
+        return React.createElement('g',{key:i},
+          React.createElement('rect',{x:i*W+3,y:y,width:W-6,height:Math.max(h, d.pct!==null?2:0),fill,rx:3,opacity:.85}),
+          React.createElement('text',{x:i*W+W/2,y:totalH-1,textAnchor:"middle",fontSize:7,fill:"var(--muted)",fontFamily:"sans-serif"},d.label),
+          pct>0&&React.createElement('text',{x:i*W+W/2,y:y-2,textAnchor:"middle",fontSize:7,fill:color,fontFamily:"sans-serif"},`${pct}%`)
+        );
+      })
+    )
+  );
+}
+
+// Daily quote card — shown at top of Today view, rotates each day
+function QuoteCard() {
+  const q = QUOTES[Math.floor(Date.now()/86400000) % QUOTES.length];
+  return React.createElement('div',{style:{background:"var(--accent-light)",border:"1px solid var(--border)",borderRadius:12,padding:"12px 14px",marginBottom:14,position:"relative"}},
+    React.createElement('div',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",color:"var(--accent)",marginBottom:6}},"Daily Motivation"),
+    React.createElement('div',{style:{fontSize:13,fontStyle:"italic",lineHeight:1.6,color:"var(--ink)",marginBottom:4}},`"${q.q}"`),
+    React.createElement('div',{style:{fontSize:11,color:"var(--muted)",textAlign:"right"}},`— ${q.a}`)
+  );
+}
 
 // ─── MODALS ───────────────────────────────────────────────────────────────────
 function ModalWrap({children,onClose}) {
@@ -358,26 +440,77 @@ function NotificationSettings({onClose}) {
 
 // ─── EXPORT ───────────────────────────────────────────────────────────────────
 function exportCSV(habits,logs,rdates,period) {
-  const rows=[["Date","Habit","Category","Completed","Note"]];
+  const rows=[["Date","Habit","Completed"]];
   rdates.forEach(d=>habits.forEach(h=>{
     if(!habitOn(h,d)) return;
-    const e=logs[h.id]?.dates?.[d];
-    rows.push([d,h.name,h.category,e?.done?"Yes":"No",e?.note||""]);
+    rows.push([d,h.name,logs[h.id]?.dates?.[d]?.done?"Yes":"No"]);
   }));
   const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
   const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=`momentum-${period}.csv`;a.click();
 }
-function exportPDF(habits,logs,rdates,period) {
-  const lines=habits.map(h=>{
-    const app=rdates.filter(d=>habitOn(h,d)),done=app.filter(d=>logs[h.id]?.dates?.[d]?.done);
-    const pct=app.length?Math.round(done.length/app.length*100):0,str=streak(h,logs);
-    const notes=app.filter(d=>logs[h.id]?.dates?.[d]?.note).map(d=>`<div style="font-size:12px;color:#6b4c35;padding:4px 10px;background:#fef9ee;border-radius:6px;margin:3px 0"><b style="color:#9e8e80">${d}:</b> <i>"${logs[h.id].dates[d].note}"</i></div>`).join("");
-    return `<div style="page-break-inside:avoid;border:1px solid #e8d9c4;border-radius:10px;padding:16px;margin-bottom:12px;background:#fff"><div style="display:flex;justify-content:space-between"><div><b>${h.name}</b> <span style="font-size:11px;background:${CAT_COLORS[h.category]}22;color:${CAT_COLORS[h.category]};border:1px solid ${CAT_COLORS[h.category]}55;padding:2px 7px;border-radius:20px">${h.category}</span></div><b style="font-size:20px;color:${CAT_COLORS[h.category]}">${pct}%</b></div><div style="font-size:12px;color:#9e8e80;margin:4px 0">${h.schedule} · ${done.length}/${app.length} days${str>0?` · 🔥 ${str} day streak`:""}</div><div style="background:#e8d9c4;height:6px;border-radius:3px;margin:6px 0"><div style="background:${CAT_COLORS[h.category]};height:6px;border-radius:3px;width:${pct}%"></div></div>${notes?`<div style="margin-top:8px"><div style="font-size:11px;font-weight:600;text-transform:uppercase;color:#9e8e80;margin-bottom:4px">Notes</div>${notes}</div>`:""}</div>`;
+
+function trendSVG(habits,logs,rdates,color) {
+  const data=trendData(habits,logs,rdates);
+  const W=28,barH=44,totalH=66,n=data.length;
+  const bars=data.map((d,i)=>{
+    const pct=d.pct!==null?d.pct:0,h=Math.round((pct/100)*barH),y=barH-h+12;
+    const fill=d.pct!==null?(pct>0?color:"#e8d9c4"):"none";
+    return `<rect x="${i*W+3}" y="${y}" width="${W-6}" height="${Math.max(h,d.pct!==null?2:0)}" fill="${fill}" rx="3" opacity="0.85"/>
+    <text x="${i*W+W/2}" y="${totalH-2}" text-anchor="middle" font-size="7" fill="#9e8e80" font-family="Georgia,serif">${d.label}</text>
+    ${pct>0?`<text x="${i*W+W/2}" y="${y-2}" text-anchor="middle" font-size="7" fill="${color}" font-family="Georgia,serif">${pct}%</text>`:""}`;
   }).join("");
+  return `<svg viewBox="0 0 ${n*W} ${totalH}" width="${Math.max(n*W,280)}" height="${totalH}" xmlns="http://www.w3.org/2000/svg">${bars}</svg>`;
+}
+
+function exportPDF(habits,logs,rdates,period) {
   const tA=habits.reduce((s,h)=>s+rdates.filter(d=>habitOn(h,d)).length,0);
   const tD=habits.reduce((s,h)=>s+rdates.filter(d=>habitOn(h,d)&&logs[h.id]?.dates?.[d]?.done).length,0);
+  const overallPct=tA?Math.round(tD/tA*100):0;
+  const chartSvg=trendSVG(habits,logs,rdates,"#c4622d");
+  const habitCards=habits.map(h=>{
+    const app=rdates.filter(d=>habitOn(h,d)),done=app.filter(d=>logs[h.id]?.dates?.[d]?.done);
+    const pct=app.length?Math.round(done.length/app.length*100):0,str=streak(h,logs);
+    const c=CAT_COLORS[h.category];
+    const heatCells=app.map(d=>{
+      const isDone=!!logs[h.id]?.dates?.[d]?.done;
+      const label=new Date(d+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"});
+      return `<div title="${label}: ${isDone?"✓":"✗"}" style="width:10px;height:10px;border-radius:2px;background:${isDone?c+"cc":"#e8d9c4"};"></div>`;
+    }).join("");
+    const notes=app.filter(d=>logs[h.id]?.dates?.[d]?.note).map(d=>`<div style="font-size:11px;padding:4px 10px;background:#fef9ee;border-radius:6px;margin:3px 0;border-left:3px solid ${c}"><b style="color:#9e8e80">${d}:</b> <i>"${logs[h.id].dates[d].note}"</i></div>`).join("");
+    return `<div style="page-break-inside:avoid;border:1px solid #e8d9c4;border-radius:12px;padding:18px;margin-bottom:14px;background:#fff">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div>
+          <div style="font-size:15px;font-weight:700;color:#3d3530;margin-bottom:3px">${h.name}</div>
+          <span style="font-size:11px;background:${c}22;color:${c};border:1px solid ${c}55;padding:2px 8px;border-radius:20px">${h.category}</span>
+          <span style="font-size:11px;color:#9e8e80;margin-left:8px">${h.schedule} · ${done.length}/${app.length} days${str>0?` · 🔥 ${str} streak`:""}</span>
+        </div>
+        <div style="font-size:26px;font-weight:700;color:${c};font-family:Georgia,serif">${pct}%</div>
+      </div>
+      <div style="background:#e8d9c4;height:8px;border-radius:4px;margin-bottom:10px"><div style="background:${c};height:8px;border-radius:4px;width:${pct}%"></div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:${notes?"10px":"0"}">${heatCells}</div>
+      ${notes?`<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#9e8e80;margin-bottom:4px;margin-top:6px">Notes</div>${notes}`:""}
+    </div>`;
+  }).join("");
   const w=window.open("","_blank");
-  if(w){w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Momentum Report</title><style>body{font-family:Georgia,serif;background:#faf7f2;padding:28px;color:#3d3530;max-width:700px;margin:0 auto}@media print{body{padding:12px}}</style></head><body><h1 style="font-size:24px;margin-bottom:4px">◆ Momentum</h1><p style="color:#9e8e80;font-size:13px;margin-bottom:22px">${PERIOD_LABELS[period]} · ${rdates[0]}–${rdates[rdates.length-1]} · Overall: <b>${tA?Math.round(tD/tA*100):0}%</b></p>${lines}<script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();}
+  if(w){w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Momentum Report</title>
+<style>body{font-family:Georgia,serif;background:#faf7f2;padding:28px;color:#3d3530;max-width:720px;margin:0 auto}@media print{body{padding:12px;background:#fff}}</style>
+</head><body>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+  <div>
+    <div style="font-size:28px;font-weight:700;font-family:Georgia,serif;color:#3d3530">◆ Momentum</div>
+    <div style="font-size:13px;color:#9e8e80;margin-top:2px">${PERIOD_LABELS[period]} · ${rdates[0]} → ${rdates[rdates.length-1]}</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-size:40px;font-weight:700;color:#c4622d;font-family:Georgia,serif">${overallPct}%</div>
+    <div style="font-size:12px;color:#9e8e80">${tD} of ${tA} habit-days</div>
+  </div>
+</div>
+<div style="background:#fff;border:1px solid #e8d9c4;border-radius:12px;padding:16px;margin-bottom:20px">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9e8e80;margin-bottom:10px">Completion Trend</div>
+  ${chartSvg}
+</div>
+${habitCards}
+<script>window.onload=()=>window.print()<\/script></body></html>`);w.document.close();}
 }
 
 // ─── CONFIRM EMAIL LINK ───────────────────────────────────────────────────────
@@ -1026,6 +1159,7 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
             new Date().toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"})
           ),
           React.createElement('div',{style:{fontSize:11,color:"var(--muted)",marginBottom:10}},"☰ drag to reorder · ✎ tap to add a note"),
+          React.createElement(QuoteCard),
           todayH.length===0
             ? React.createElement('div',{style:{textAlign:"center",padding:"40px 20px",color:"var(--muted)"}},
                 React.createElement('div',{style:{fontSize:36,marginBottom:10}},"🌿"),
@@ -1112,53 +1246,97 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
         ),
 
         // ── REPORTS ──
-        view==="reports"&&React.createElement('div',null,
-          React.createElement('div',{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}},
-            React.createElement('h2',{style:{fontFamily:"'Lora',serif",fontSize:16,fontWeight:700}},"Reports"),
-            React.createElement('div',{style:{display:"flex",gap:6}},
-              React.createElement('button',{onClick:()=>exportCSV(habits,logs,rDates,rPeriod),style:{padding:"6px 12px",borderRadius:9,border:"1.5px solid #e8d9c4",background:"var(--card)",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"↓ CSV"),
-              React.createElement('button',{onClick:()=>exportPDF(habits,logs,rDates,rPeriod),style:{padding:"6px 12px",borderRadius:9,border:"1.5px solid #e8d9c4",background:"var(--card)",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"↓ PDF")
-            )
-          ),
-          React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:5,marginBottom:12}},
-            Object.entries(PERIOD_LABELS).map(([p,l])=>React.createElement('button',{key:p,onClick:()=>setRPeriod(p),style:{padding:"5px 11px",borderRadius:20,fontSize:11,border:"1.5px solid var(--border)",background:rPeriod===p?"var(--ink)":"var(--card)",color:rPeriod===p?"var(--bg)":"var(--ink)",fontFamily:"inherit",cursor:"pointer",fontWeight:rPeriod===p?600:400}},l))
-          ),
-          habits.length===0
-            ? React.createElement('div',{style:{textAlign:"center",padding:"40px",color:"var(--muted)"}},React.createElement('div',{style:{fontSize:32,marginBottom:8}},"📊"),React.createElement('p',null,"Add habits to see reports."))
-            : React.createElement('div',null,
-                // Overall
-                (()=>{const tA=habits.reduce((s,h)=>s+rDates.filter(d=>habitOn(h,d)).length,0),tD=habits.reduce((s,h)=>s+rDates.filter(d=>habitOn(h,d)&&logs[h.id]?.dates?.[d]?.done).length,0),pct=tA?Math.round(tD/tA*100):0;
-                return React.createElement('div',{style:{background:"linear-gradient(135deg,var(--bg),var(--accent-light))",borderRadius:14,padding:"16px",marginBottom:12,boxShadow:"0 1px 4px rgba(61,53,48,.06)"}},
-                  React.createElement('div',{style:{fontFamily:"'Lora',serif",fontSize:13,fontWeight:700,marginBottom:8}},"Overall — "+PERIOD_LABELS[rPeriod]),
-                  React.createElement('div',{style:{display:"flex",alignItems:"center",gap:12}},
-                    React.createElement(Ring,{pct,color:"var(--accent)",size:50}),
-                    React.createElement('div',null,
-                      React.createElement('div',{style:{fontSize:13,fontWeight:600}},[tD,"of",tA,"habit-days"].join(" ")),
-                      React.createElement('div',{style:{fontSize:11,color:"var(--muted)",marginTop:2}},rDates[0]+" → "+rDates[rDates.length-1])
-                    )
-                  )
-                );})(),
-                // Per habit
-                habits.map(h=>{const app=rDates.filter(d=>habitOn(h,d)),done=app.filter(d=>logs[h.id]?.dates?.[d]?.done),pct=app.length?Math.round(done.length/app.length*100):null,str=streak(h,logs),nd=app.filter(d=>logs[h.id]?.dates?.[d]?.note);
-                return React.createElement('div',{key:h.id,style:{background:"var(--card)",borderRadius:12,padding:"14px",marginBottom:8,boxShadow:"0 1px 4px rgba(61,53,48,.06)"}},
-                  React.createElement('div',{style:{display:"flex",alignItems:"center",gap:10}},
-                    React.createElement(Ring,{pct,color:CAT_COLORS[h.category],size:40}),
-                    React.createElement('div',{style:{flex:1,minWidth:0}},
-                      React.createElement('div',{style:{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:3}},
-                        React.createElement('span',{style:{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:160}},h.name),
-                        str>0&&React.createElement('span',{style:{fontSize:11,color:"var(--accent)",fontWeight:700}},"🔥"+str)
-                      ),
-                      React.createElement('div',{style:{height:6,borderRadius:3,background:"var(--border)",overflow:"hidden"}},React.createElement('div',{style:{height:6,borderRadius:3,background:CAT_COLORS[h.category],width:`${pct||0}%`,transition:"width .5s"}})),
-                      React.createElement('div',{style:{fontSize:10,color:"var(--muted)",marginTop:3}},[done.length+"/"+app.length+" days",h.schedule].join(" · ")),
-                      nd.length>0&&nd.slice(-2).map(d=>React.createElement('div',{key:d,style:{display:"flex",gap:6,marginTop:5,background:"var(--accent-light)",borderRadius:7,padding:"5px 9px",fontSize:11}},
-                        React.createElement('span',{style:{color:"var(--muted)",flexShrink:0}},new Date(d+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"})),
-                        React.createElement('span',{style:{color:"var(--ink)",fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},'"'+logs[h.id].dates[d].note+'"')
-                      ))
-                    )
-                  )
-                );})
+        view==="reports"&&(()=>{
+          const tA=habits.reduce((s,h)=>s+rDates.filter(d=>habitOn(h,d)).length,0);
+          const tD=habits.reduce((s,h)=>s+rDates.filter(d=>habitOn(h,d)&&logs[h.id]?.dates?.[d]?.done).length,0);
+          const overallPct=tA?Math.round(tD/tA*100):0;
+          const trend=habits.length?trendData(habits,logs,rDates):[];
+          const last7=weekDates(0);
+          return React.createElement('div',null,
+            // Header
+            React.createElement('div',{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}},
+              React.createElement('h2',{style:{fontFamily:"'Lora',serif",fontSize:16,fontWeight:700}},"Reports"),
+              React.createElement('div',{style:{display:"flex",gap:6}},
+                React.createElement('button',{onClick:()=>exportCSV(habits,logs,rDates,rPeriod),style:{padding:"6px 12px",borderRadius:9,border:"1.5px solid var(--border)",background:"var(--card)",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",color:"var(--ink)"}},"↓ CSV"),
+                React.createElement('button',{onClick:()=>exportPDF(habits,logs,rDates,rPeriod),style:{padding:"6px 12px",borderRadius:9,border:"1.5px solid var(--accent)",background:"var(--accent)",color:"white",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}},"↓ PDF")
               )
-        ),
+            ),
+            // Period selector
+            React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:5,marginBottom:12}},
+              Object.entries(PERIOD_LABELS).map(([p,l])=>React.createElement('button',{key:p,onClick:()=>setRPeriod(p),style:{padding:"5px 11px",borderRadius:20,fontSize:11,border:"1.5px solid var(--border)",background:rPeriod===p?"var(--ink)":"var(--card)",color:rPeriod===p?"var(--bg)":"var(--ink)",fontFamily:"inherit",cursor:"pointer",fontWeight:rPeriod===p?600:400}},l))
+            ),
+            habits.length===0
+              ? React.createElement('div',{style:{textAlign:"center",padding:"40px",color:"var(--muted)"}},React.createElement('div',{style:{fontSize:32,marginBottom:8}},"📊"),React.createElement('p',null,"Add habits to see reports."))
+              : React.createElement('div',null,
+                  // ── Overall summary hero ──
+                  React.createElement('div',{style:{background:"linear-gradient(135deg,var(--accent-light),var(--card))",border:"1.5px solid var(--border)",borderRadius:16,padding:"18px",marginBottom:10,boxShadow:"0 2px 8px rgba(61,53,48,.07)"}},
+                    React.createElement('div',{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}},
+                      React.createElement('div',null,
+                        React.createElement('div',{style:{fontFamily:"'Lora',serif",fontSize:14,fontWeight:700,marginBottom:2}},PERIOD_LABELS[rPeriod]+" Overview"),
+                        React.createElement('div',{style:{fontSize:11,color:"var(--muted)"}},rDates[0]+" → "+rDates[rDates.length-1])
+                      ),
+                      React.createElement('div',{style:{textAlign:"right"}},
+                        React.createElement('div',{style:{fontFamily:"'Lora',serif",fontSize:34,fontWeight:700,color:"var(--accent)",lineHeight:1}},overallPct+"%"),
+                        React.createElement('div',{style:{fontSize:11,color:"var(--muted)",marginTop:2}},tD+" / "+tA+" days")
+                      )
+                    ),
+                    // Progress bar
+                    React.createElement('div',{style:{background:"var(--border)",height:8,borderRadius:4,overflow:"hidden",marginBottom:14}},
+                      React.createElement('div',{style:{background:"var(--accent)",height:8,borderRadius:4,width:`${overallPct}%`,transition:"width .6s"}})
+                    ),
+                    // Trend chart
+                    React.createElement('div',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",marginBottom:6}},"Completion Trend"),
+                    React.createElement(TrendChart,{data:trend,color:"var(--accent)"})
+                  ),
+                  // ── 7-day heatmap ──
+                  React.createElement('div',{style:{background:"var(--card)",border:"1px solid var(--border)",borderRadius:14,padding:"14px",marginBottom:10}},
+                    React.createElement('div',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",marginBottom:10}},"Last 7 Days"),
+                    // Day headers
+                    React.createElement('div',{style:{display:"grid",gridTemplateColumns:`80px repeat(7,1fr)`,gap:3,marginBottom:4}},
+                      React.createElement('div',null),
+                      last7.map(d=>React.createElement('div',{key:d,style:{fontSize:9,color:"var(--muted)",textAlign:"center",fontWeight:600}},
+                        new Date(d+"T00:00:00").toLocaleDateString("en-US",{weekday:"short"})
+                      ))
+                    ),
+                    // Habit rows
+                    habits.filter(h=>!h.paused).map(h=>React.createElement('div',{key:h.id,style:{display:"grid",gridTemplateColumns:"80px repeat(7,1fr)",gap:3,marginBottom:3,alignItems:"center"}},
+                      React.createElement('div',{style:{fontSize:10,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",paddingRight:4}},h.name),
+                      last7.map(d=>{
+                        const scheduled=habitOn(h,d);
+                        const done=!!logs[h.id]?.dates?.[d]?.done;
+                        const bg=!scheduled?"transparent":done?CAT_COLORS[h.category]:"var(--border)";
+                        return React.createElement('div',{key:d,title:d,style:{height:14,borderRadius:3,background:bg,opacity:done?.9:.5,border:scheduled&&!done?"1px solid var(--border)":"none"}});
+                      })
+                    ))
+                  ),
+                  // ── Per-habit cards ──
+                  habits.map(h=>{
+                    const app=rDates.filter(d=>habitOn(h,d)),done=app.filter(d=>logs[h.id]?.dates?.[d]?.done),pct=app.length?Math.round(done.length/app.length*100):null,str=streak(h,logs),nd=app.filter(d=>logs[h.id]?.dates?.[d]?.note);
+                    return React.createElement('div',{key:h.id,style:{background:"var(--card)",borderRadius:12,padding:"14px",marginBottom:8,boxShadow:"0 1px 4px rgba(61,53,48,.06)",borderLeft:`4px solid ${CAT_COLORS[h.category]}`}},
+                      React.createElement('div',{style:{display:"flex",alignItems:"center",gap:10,marginBottom:8}},
+                        React.createElement(Ring,{pct,color:CAT_COLORS[h.category],size:42}),
+                        React.createElement('div',{style:{flex:1,minWidth:0}},
+                          React.createElement('div',{style:{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:2}},
+                            React.createElement('span',{style:{fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:160}},h.name),
+                            str>0&&React.createElement('span',{style:{fontSize:11,color:"#e07a5f",fontWeight:700}},"🔥 "+str),
+                            React.createElement('span',{style:{fontSize:10,background:CAT_COLORS[h.category]+"22",color:CAT_COLORS[h.category],border:`1px solid ${CAT_COLORS[h.category]}55`,padding:"1px 7px",borderRadius:20}},h.category)
+                          ),
+                          React.createElement('div',{style:{height:6,borderRadius:3,background:"var(--border)",overflow:"hidden"}},React.createElement('div',{style:{height:6,borderRadius:3,background:CAT_COLORS[h.category],width:`${pct||0}%`,transition:"width .5s"}})),
+                          React.createElement('div',{style:{fontSize:10,color:"var(--muted)",marginTop:3}},done.length+"/"+app.length+" days · "+h.schedule)
+                        )
+                      ),
+                      nd.length>0&&React.createElement('div',{style:{borderTop:"1px solid var(--border)",paddingTop:8}},
+                        React.createElement('div',{style:{fontSize:10,fontWeight:700,textTransform:"uppercase",color:"var(--muted)",letterSpacing:".06em",marginBottom:4}},"Recent Notes"),
+                        nd.slice(-2).map(d=>React.createElement('div',{key:d,style:{display:"flex",gap:6,marginBottom:4,background:"var(--accent-light)",borderRadius:7,padding:"5px 9px",fontSize:11}},
+                          React.createElement('span',{style:{color:"var(--muted)",flexShrink:0}},new Date(d+"T00:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"})),
+                          React.createElement('span',{style:{color:"var(--ink)",fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},'"'+logs[h.id].dates[d].note+'"')
+                        ))
+                      )
+                    );
+                  })
+                )
+          );
+        })(),
 
         // ── MANAGE ──
         view==="manage"&&React.createElement('div',null,
