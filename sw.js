@@ -1,6 +1,6 @@
 // ─── Momentum PWA Service Worker ─────────────────────────────────────────────
-const CACHE_NAME      = 'momentum-v2';
-const DYNAMIC_CACHE   = 'momentum-dynamic-v2';
+const CACHE_NAME      = 'momentum-v3';
+const DYNAMIC_CACHE   = 'momentum-dynamic-v3';
 const BASE            = new URL('./', self.location.href).pathname; // e.g. /momentum-pwa/
 const OFFLINE_URL     = BASE + 'offline.html';
 

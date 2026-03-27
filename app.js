@@ -238,7 +238,7 @@ function NoteModal({habitId,date,habitName,existing,onClose,onSave}) {
       React.createElement('div',{style:{width:36,height:4,background:"#e8d9c4",borderRadius:2,margin:"0 auto 16px"}}),
       React.createElement('div',{style:{fontFamily:"'Lora',serif",fontSize:17,fontWeight:700,marginBottom:2}},"Daily Note"),
       React.createElement('div',{style:{fontSize:12,color:"var(--muted)",marginBottom:14}},`${habitName} · ${date}`),
-      React.createElement('textarea',{style:{width:"100%",padding:"11px 14px",border:"1.5px solid #e8d9c4",borderRadius:12,fontSize:14,outline:"none",background:"var(--bg)",resize:"none",lineHeight:1.6,minHeight:90,fontFamily:"'DM Sans',sans-serif"},placeholder:"How did it go? Any notes…",value:note,onChange:e=>setNote(e.target.value)}),
+      React.createElement('textarea',{style:{width:"100%",padding:"11px 14px",border:"1.5px solid var(--border)",borderRadius:12,fontSize:14,outline:"none",background:"var(--bg)",color:"var(--ink)",resize:"none",lineHeight:1.6,minHeight:90,fontFamily:"'DM Sans',sans-serif"},placeholder:"How did it go? Any notes…",value:note,onChange:e=>setNote(e.target.value)}),
       React.createElement('div',{style:{display:"flex",gap:8,marginTop:12}},
         existing&&React.createElement('button',{onClick:()=>onSave(""),style:{padding:"11px 16px",borderRadius:12,background:"var(--accent-light)",color:"var(--accent)",fontSize:13,fontWeight:500,border:"none",cursor:"pointer"}},"Clear"),
         React.createElement('button',{onClick:onClose,style:{flex:1,padding:"11px",borderRadius:12,background:"var(--accent-light)",fontSize:14,fontWeight:500,border:"none",cursor:"pointer"}},"Cancel"),
@@ -279,7 +279,7 @@ function HabitModal({existing,onClose,onSave}) {
       React.createElement('div',{style:{width:36,height:4,background:"#e8d9c4",borderRadius:2,margin:"0 auto 16px"}}),
       React.createElement('div',{style:{fontFamily:"'Lora',serif",fontSize:19,fontWeight:700,marginBottom:16}},existing?"Edit Habit":"New Habit"),
       React.createElement(ModalRow,{label:"Name"},
-        React.createElement('input',{style:{width:"100%",padding:"11px 14px",border:"1.5px solid #e8d9c4",borderRadius:12,fontSize:14,outline:"none",background:"var(--bg)",fontFamily:"inherit"},placeholder:"e.g. Morning run…",value:name,onChange:e=>setName(e.target.value)})
+        React.createElement('input',{style:{width:"100%",padding:"11px 14px",border:"1.5px solid var(--border)",borderRadius:12,fontSize:14,outline:"none",background:"var(--bg)",color:"var(--ink)",fontFamily:"inherit"},placeholder:"e.g. Morning run…",value:name,onChange:e=>setName(e.target.value)})
       ),
       React.createElement(ModalRow,{label:"Category"},
         React.createElement(ModalPills,{items:CATEGORIES,active:cat,onPick:setCat,colorFn:c=>CAT_COLORS[c]})
@@ -531,7 +531,7 @@ function AuthPage({mode:im,onAuth,onBack}) {
     setLoading(false);
   };
 
-  const inp=extra=>({style:{width:"100%",padding:"13px 15px",border:"1.5px solid #e8d9c4",borderRadius:14,fontSize:15,outline:"none",background:"var(--bg)",fontFamily:"'DM Sans',sans-serif",marginTop:5},...extra});
+  const inp=extra=>({style:{width:"100%",padding:"13px 15px",border:"1.5px solid var(--border)",borderRadius:14,fontSize:15,outline:"none",background:"var(--bg)",color:"var(--ink)",fontFamily:"'DM Sans',sans-serif",marginTop:5},...extra});
   const tabBtn=(t,label)=>React.createElement('button',{onClick:()=>{setAuthType(t);setErr("");setLinkSent(false);},style:{flex:1,padding:"9px",borderRadius:10,border:"none",background:authType===t?"var(--card)":"transparent",color:authType===t?"var(--ink)":"var(--muted)",fontWeight:authType===t?700:400,fontSize:13,cursor:"pointer",fontFamily:"inherit",boxShadow:authType===t?"0 1px 4px rgba(0,0,0,.08)":"none",transition:"all .15s"}},label);
 
   return React.createElement('div',{style:{minHeight:"100%",background:"var(--bg)",display:"flex",flexDirection:"column",padding:"0 24px 24px",paddingBottom:"calc(24px + env(safe-area-inset-bottom))"}},
@@ -572,7 +572,7 @@ function AuthPage({mode:im,onAuth,onBack}) {
 
           // ── Password flow ─────────────────────────────────────────────────
           : React.createElement(React.Fragment,null,
-              mode==="signup"&&React.createElement('div',{style:{marginBottom:14}},
+              React.createElement('div',{style:{marginBottom:14,display:mode==="signup"?"":"none"}},
                 React.createElement('label',{style:{fontSize:12,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em"}},"Full Name"),
                 React.createElement('input',inp({placeholder:"Your name",value:name,onChange:e=>setName(e.target.value)}))
               ),
@@ -597,32 +597,82 @@ function AuthPage({mode:im,onAuth,onBack}) {
 
 // ─── ONBOARDING ───────────────────────────────────────────────────────────────
 function OnboardingPage({user,onComplete}) {
+  const [step,setStep]=useState(1);
+  const [name,setName]=useState(user.name||"");
+  const [dob,setDob]=useState("");
+  const [height,setHeight]=useState("");
+  const [gender,setGender]=useState("");
   const [plan,setPlan]=useState("cloud");
   const [billing,setBilling]=useState("monthly");
   const [dc,setDc]=useState(false);
   const [ac,setAc]=useState(false);
+
   const proceed=async()=>{
     if(plan==="free"&&(!dc||!ac)) return;
     const admin=isAdmin(user.email);
     const finalPlan=admin?"cloud":plan;
+    const trimmedName=name.trim()||user.email.split("@")[0];
     const users=await loadUsers();
-    const u={...users[user.email],plan:finalPlan,billing,role:admin?"admin":undefined,joinedAt:users[user.email]?.joinedAt||todayStr()};
-    users[user.email]=u; await saveUsers(users); await saveAuth({...user,plan:finalPlan,billing,role:u.role});
-    onComplete({...user,plan:finalPlan,billing,role:u.role});
+    const u={...users[user.email],name:trimmedName,dob,height,gender,plan:finalPlan,billing,role:admin?"admin":undefined,joinedAt:users[user.email]?.joinedAt||todayStr()};
+    users[user.email]=u; await saveUsers(users);
+    const full={...user,name:trimmedName,dob,height,gender,plan:finalPlan,billing,role:u.role};
+    await saveAuth(full);
+    onComplete(full);
   };
+
   const pl=(p)=>{ const P=PRICING[p]; return p==="free"?"Free forever":billing==="monthly"?`$${P.monthly}/mo`:`$${P.yearly}/yr`; };
   const PLANS=[
     {key:"free",emoji:"🌱",label:"Free",sub:"Ads · data shared to fund the product",color:"#81b29a"},
     {key:"local",emoji:"💾",label:"Local Pro",sub:"On this device · no ads · offline",color:"#c4a882"},
     {key:"cloud",emoji:"☁️",label:"Cloud Pro",sub:"Private cloud · no ads · multi-device",color:"var(--accent)"},
   ];
-  return React.createElement('div',{style:{minHeight:"100%",background:"var(--bg)",padding:"calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom))"}},
-    React.createElement('div',{style:{display:"flex",alignItems:"center",gap:8,marginBottom:24}},
-      React.createElement('span',{style:{fontSize:20,color:"var(--accent)",fontFamily:"'Lora',serif",fontWeight:700}},"◆"),
-      React.createElement('span',{style:{fontFamily:"'Lora',serif",fontWeight:700,fontSize:18}},"Momentum")
+
+  const inp={style:{width:"100%",padding:"11px 14px",border:"1.5px solid var(--border)",borderRadius:12,fontSize:14,outline:"none",background:"var(--card)",color:"var(--ink)",fontFamily:"inherit",boxSizing:"border-box"}};
+  const GENDERS=["Male","Female","Non-binary","Prefer not to say"];
+
+  const header=React.createElement('div',{style:{display:"flex",alignItems:"center",gap:8,marginBottom:24}},
+    React.createElement('span',{style:{fontSize:20,color:"var(--accent)",fontFamily:"'Lora',serif",fontWeight:700}},"◆"),
+    React.createElement('span',{style:{fontFamily:"'Lora',serif",fontWeight:700,fontSize:18}},"Momentum")
+  );
+  const steps=React.createElement('div',{style:{display:"flex",gap:6,marginBottom:24}},
+    [1,2].map(s=>React.createElement('div',{key:s,style:{height:4,flex:1,borderRadius:2,background:step>=s?"var(--accent)":"var(--border)",transition:"background .3s"}}))
+  );
+
+  if(step===1) return React.createElement('div',{style:{minHeight:"100%",background:"var(--bg)",padding:"calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom))"}},
+    header, steps,
+    React.createElement('h2',{style:{fontFamily:"'Lora',serif",fontSize:22,fontWeight:700,marginBottom:4}},"Let's set up your profile"),
+    React.createElement('p',{style:{fontSize:13,color:"var(--muted)",marginBottom:24}},"Tell us a bit about yourself. Only your name is required."),
+
+    React.createElement('div',{style:{marginBottom:14}},
+      React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:6}},"Full Name *"),
+      React.createElement('input',{...inp,placeholder:"e.g. Alex Johnson",value:name,onChange:e=>setName(e.target.value)})
     ),
-    React.createElement('h2',{style:{fontFamily:"'Lora',serif",fontSize:22,fontWeight:700,marginBottom:4}},`Welcome, ${user.name}! 👋`),
-    React.createElement('p',{style:{fontSize:13,color:"var(--muted)",marginBottom:20}},"Choose how your data is stored. You can change this anytime."),
+    React.createElement('div',{style:{marginBottom:14}},
+      React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:6}},"Date of Birth"),
+      React.createElement('input',{...inp,type:"date",value:dob,onChange:e=>setDob(e.target.value),style:{...inp.style,colorScheme:"dark light"}})
+    ),
+    React.createElement('div',{style:{marginBottom:14}},
+      React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:6}},"Height"),
+      React.createElement('input',{...inp,placeholder:"e.g. 5'10\" or 178 cm",value:height,onChange:e=>setHeight(e.target.value)})
+    ),
+    React.createElement('div',{style:{marginBottom:28}},
+      React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:8}},"Gender"),
+      React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:8}},
+        GENDERS.map(g=>React.createElement('button',{key:g,onClick:()=>setGender(gender===g?"":g),style:{padding:"8px 16px",borderRadius:20,fontSize:13,border:`1.5px solid ${gender===g?"var(--accent)":"var(--border)"}`,background:gender===g?"var(--accent)":"var(--card)",color:gender===g?"white":"var(--ink)",fontFamily:"inherit",cursor:"pointer",transition:"all .15s"}},g))
+      )
+    ),
+    React.createElement('button',{onClick:()=>{if(name.trim()||user.email)setStep(2);},disabled:false,style:{width:"100%",padding:"15px",borderRadius:14,background:"var(--accent)",color:"white",fontSize:15,fontWeight:700,border:"none",cursor:"pointer",opacity:name.trim()?1:.5}},"Continue →")
+  );
+
+  return React.createElement('div',{style:{minHeight:"100%",background:"var(--bg)",padding:"calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom))"}},
+    header, steps,
+    React.createElement('div',{style:{display:"flex",alignItems:"center",gap:10,marginBottom:20}},
+      React.createElement('button',{onClick:()=>setStep(1),style:{fontSize:20,color:"var(--muted)",background:"none",border:"none",cursor:"pointer",lineHeight:1}},"←"),
+      React.createElement('div',null,
+        React.createElement('h2',{style:{fontFamily:"'Lora',serif",fontSize:22,fontWeight:700,margin:0}},`Hi ${name.trim()||"there"} 👋`),
+        React.createElement('p',{style:{fontSize:13,color:"var(--muted)",margin:"2px 0 0"}},"Choose how your data is stored.")
+      )
+    ),
     React.createElement('div',{style:{display:"inline-flex",background:"var(--accent-light)",border:"1px solid var(--border)",borderRadius:30,padding:3,gap:2,marginBottom:16}},
       ["monthly","yearly"].map(b=>React.createElement('button',{key:b,onClick:()=>setBilling(b),style:{padding:"7px 16px",borderRadius:26,fontSize:12,fontWeight:600,background:billing===b?"var(--ink)":"transparent",color:billing===b?"white":"var(--muted)",border:"none",cursor:"pointer",fontFamily:"inherit"}},b.charAt(0).toUpperCase()+b.slice(1)))
     ),
@@ -695,7 +745,7 @@ function LandingPage({onSignup,onLogin}) {
       React.createElement('p',{style:{fontSize:13,color:"var(--muted)",textAlign:"center",marginBottom:20}},"No hidden fees. Cancel anytime."),
       React.createElement('div',{style:{display:"flex",justifyContent:"center",marginBottom:20}},
         React.createElement('div',{style:{display:"inline-flex",background:"var(--accent-light)",border:"1px solid #e8d9c4",borderRadius:30,padding:3,gap:2}},
-          ["monthly","yearly"].map(b=>React.createElement('button',{key:b,onClick:()=>setBilling(b),style:{padding:"7px 16px",borderRadius:26,fontSize:12,fontWeight:600,background:billing===b?"#3d3530":"transparent",color:billing===b?"white":"#9e8e80",border:"none",cursor:"pointer",fontFamily:"inherit"}},b.charAt(0).toUpperCase()+b.slice(1)))
+          ["monthly","yearly"].map(b=>React.createElement('button',{key:b,onClick:()=>setBilling(b),style:{padding:"7px 16px",borderRadius:26,fontSize:12,fontWeight:600,background:billing===b?"var(--ink)":"transparent",color:billing===b?"white":"var(--muted)",border:"none",cursor:"pointer",fontFamily:"inherit"}},b.charAt(0).toUpperCase()+b.slice(1)))
         )
       ),
       PLANS.map(p=>React.createElement('div',{key:p.key,style:{background:"var(--card)",borderRadius:16,padding:"20px",marginBottom:12,border:`2px solid ${p.badge?"var(--accent)":"var(--sand)"}`,position:"relative",boxShadow:p.badge?"0 4px 20px rgba(196,98,45,.10)":"none"}},
@@ -772,6 +822,12 @@ function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenA
   const [billing,setBilling]=useState(user.billing||"monthly");
   const [saved,setSaved]=useState(false);
   const [curTheme,setCurTheme]=useState(localStorage.getItem('mo:theme')||'light');
+  const [editProfile,setEditProfile]=useState(false);
+  const [pName,setPName]=useState(user.name||"");
+  const [pDob,setPDob]=useState(user.dob||"");
+  const [pHeight,setPHeight]=useState(user.height||"");
+  const [pGender,setPGender]=useState(user.gender||"");
+  const [profileSaved,setProfileSaved]=useState(false);
   const changeTheme=name=>{setCurTheme(name);applyTheme(name);localStorage.setItem('mo:theme',name);};
   const PC={free:"#81b29a",local:"#c4a882",cloud:"#c4622d"};
   const PE={free:"🌱",local:"💾",cloud:"☁️"};
@@ -781,6 +837,16 @@ function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenA
     users[user.email]=u; await saveUsers(users); await saveAuth({...user,plan:p,billing});
     onPlanChange({...user,plan:p,billing}); setSaved(true); setTimeout(()=>setSaved(false),2000);
   };
+  const saveProfile=async()=>{
+    if(!pName.trim()) return;
+    const updated={...user,name:pName.trim(),dob:pDob,height:pHeight,gender:pGender};
+    await saveAuth(updated);
+    onPlanChange(updated);
+    setEditProfile(false);
+    setProfileSaved(true); setTimeout(()=>setProfileSaved(false),2000);
+  };
+  const GENDERS=["Male","Female","Non-binary","Prefer not to say"];
+  const inp={style:{width:"100%",padding:"10px 13px",border:"1.5px solid var(--border)",borderRadius:10,fontSize:14,outline:"none",background:"var(--bg)",color:"var(--ink)",fontFamily:"inherit",boxSizing:"border-box",marginBottom:10}};
 
   const Section=({title,children})=>React.createElement('div',{style:{background:"var(--card)",borderRadius:16,padding:"18px 18px",marginBottom:12}},
     React.createElement('div',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",marginBottom:12}},title),
@@ -796,6 +862,37 @@ function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenA
       )
     ),
     React.createElement('div',{style:{padding:"16px 16px 0"}},
+      React.createElement(Section,{title:"Profile"},
+        editProfile
+          ? React.createElement('div',null,
+              React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:4}},"Full Name *"),
+              React.createElement('input',{...inp,placeholder:"Your name",value:pName,onChange:e=>setPName(e.target.value)}),
+              React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:4}},"Date of Birth"),
+              React.createElement('input',{...inp,type:"date",value:pDob,onChange:e=>setPDob(e.target.value),style:{...inp.style,colorScheme:"dark light"}}),
+              React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:4}},"Height"),
+              React.createElement('input',{...inp,placeholder:"e.g. 5'10\" or 178 cm",value:pHeight,onChange:e=>setPHeight(e.target.value)}),
+              React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:8}},"Gender"),
+              React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}},
+                GENDERS.map(g=>React.createElement('button',{key:g,onClick:()=>setPGender(pGender===g?"":g),style:{padding:"6px 13px",borderRadius:20,fontSize:12,border:`1.5px solid ${pGender===g?"var(--accent)":"var(--border)"}`,background:pGender===g?"var(--accent)":"var(--card)",color:pGender===g?"white":"var(--ink)",fontFamily:"inherit",cursor:"pointer"}},g))
+              ),
+              React.createElement('div',{style:{display:"flex",gap:8}},
+                React.createElement('button',{onClick:()=>setEditProfile(false),style:{flex:1,padding:"10px",borderRadius:10,background:"var(--border)",color:"var(--ink)",fontSize:13,fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit"}},"Cancel"),
+                React.createElement('button',{onClick:saveProfile,disabled:!pName.trim(),style:{flex:2,padding:"10px",borderRadius:10,background:"var(--accent)",color:"white",fontSize:13,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit",opacity:pName.trim()?1:.5}},"Save Profile")
+              )
+            )
+          : React.createElement('div',null,
+              React.createElement('div',{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+                React.createElement('div',null,
+                  React.createElement('div',{style:{fontWeight:600,fontSize:15,marginBottom:2}},user.name||React.createElement('span',{style:{color:"var(--muted)",fontStyle:"italic"}},"No name set")),
+                  user.dob&&React.createElement('div',{style:{fontSize:12,color:"var(--muted)"}},`DOB: ${user.dob}`),
+                  user.height&&React.createElement('div',{style:{fontSize:12,color:"var(--muted)"}},`Height: ${user.height}`),
+                  user.gender&&React.createElement('div',{style:{fontSize:12,color:"var(--muted)"}},`Gender: ${user.gender}`)
+                ),
+                React.createElement('button',{onClick:()=>setEditProfile(true),style:{padding:"6px 14px",borderRadius:10,background:"var(--accent-light)",color:"var(--accent)",fontSize:12,fontWeight:600,border:"none",cursor:"pointer",fontFamily:"inherit"}},"Edit")
+              ),
+              profileSaved&&React.createElement('div',{style:{fontSize:12,color:"var(--accent)",fontWeight:600,marginTop:6}},"✓ Profile saved!")
+            )
+      ),
       React.createElement(Section,{title:"Current Plan"},
         React.createElement('div',{style:{display:"flex",alignItems:"center",gap:12}},
           React.createElement('span',{style:{fontSize:28}},PE[user.plan]),
@@ -838,7 +935,7 @@ function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenA
             ? React.createElement('button',{onClick:()=>switchPlan(p.key),style:{padding:"5px 12px",borderRadius:8,background:"var(--accent-light)",border:"none",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"Switch")
             : React.createElement('span',{style:{fontSize:11,color:PC[p.key],fontWeight:700}},"✓")
         )),
-        saved&&React.createElement('div',{style:{fontSize:13,color:"#3a8c5c",fontWeight:600,marginTop:6}},"✓ Plan updated!")
+        saved&&React.createElement('div',{style:{fontSize:13,color:"var(--accent)",fontWeight:600,marginTop:6}},"✓ Plan updated!")
       ),
       user.plan==="free"&&React.createElement(Section,{title:"Data We Collect"},
         React.createElement('div',{style:{background:"var(--accent-light)",border:"1px solid var(--border)",borderRadius:10,padding:"12px 14px"}},
