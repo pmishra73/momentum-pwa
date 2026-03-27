@@ -3,11 +3,7 @@
 const { useState, useEffect, useCallback, useRef, memo } = React;
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const PRICING = {
-  local: { monthly:3, yearly:29, label:"Local Pro" },
-  cloud: { monthly:4, yearly:35, label:"Cloud Pro" },
-  free:  { monthly:0, yearly:0,  label:"Free" },
-};
+// All users get full cloud features for free
 const CATEGORIES  = ["Health","Work","Learning","Mindfulness","Finance","Social","Other"];
 const CAT_COLORS  = { Health:"#e07a5f",Work:"#3d405b",Learning:"#81b29a",Mindfulness:"#f2cc8f",Finance:"#a8c5da",Social:"#c9ada7",Other:"#b5b5a9" };
 const DAYS        = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -69,24 +65,17 @@ const fsGet    = async (col,id) => { try { const s=await window.__fb.db.collecti
 const fsSet    = async (col,id,data,merge=true) => { try { await window.__fb.db.collection(col).doc(id).set(data,{merge}); return true; } catch(e) { console.error('[FB] write failed:',e); return false; } };
 const fsGetAll = async (col) => { try { const s=await window.__fb.db.collection(col).get(); const r={}; s.forEach(d=>{r[d.id]=d.data();}); return r; } catch { return {}; } };
 
-// ─── User habit data ───────────────────────────────────────────────────────────
-// "local" plan → IndexedDB (device-only, by design)
-// "free" / "cloud" plan → localStorage (instant, always works) + Firestore (cross-device sync)
-const loadUD = async (uid,plan) => {
-  if (plan==="local") return idb.get(`mo:${uid}:data`);
-  // Cloud/free: try Firestore first for freshest cross-device data
+// ─── User habit data ─────────────────────────────────────────────────────────
+// Always Firestore + local cache (all users get cloud sync)
+const loadUD = async (uid) => {
   if (window.__fb) {
     const d = await fsGet('userdata',uid);
-    if (d) { ls.set(`mo:ud:${uid}`,d); return d; } // cache locally for offline use
+    if (d) { ls.set(`mo:ud:${uid}`,d); return d; }
   }
-  // Firestore unavailable or empty — use local cache
   return ls.get(`mo:ud:${uid}`);
 };
-const saveUD = async (uid,plan,d) => {
-  if (plan==="local") return idb.set(`mo:${uid}:data`,d);
-  // Always persist locally first (instant, survives network failures & deployments)
+const saveUD = async (uid,d) => {
   await ls.set(`mo:ud:${uid}`,d);
-  // Then async-sync to Firestore for cross-device access (non-blocking)
   if (window.__fb) fsSet('userdata',uid,d,false).catch(e=>console.warn('[FB] sync failed:',e));
 };
 
@@ -188,36 +177,6 @@ const Ring = ({pct,color,size=44}) => {
   );
 };
 
-// ─── AD COMPONENTS ────────────────────────────────────────────────────────────
-const AD_COPY = [
-  {tag:"Wellness",headline:"Better Sleep Starts Tonight",body:"SleepCycle tracks rest like you track habits.",cta:"Try Free",color:"#a8c5da"},
-  {tag:"Fitness", headline:"Level Up Your Runs",         body:"Strava Premium — deeper stats for athletes.",  cta:"Explore",  color:"#81b29a"},
-  {tag:"Finance", headline:"Save Without Thinking",      body:"Oportun auto-saves spare change daily.",        cta:"Open",     color:"#f2cc8f"},
-];
-
-function AdBanner({onDismiss}) {
-  const ad=AD_COPY[0];
-  return React.createElement('div',{style:{background:`linear-gradient(135deg,${ad.color}22,${ad.color}44)`,border:`1px solid ${ad.color}88`,borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,marginBottom:10,position:"relative"}},
-    React.createElement('div',{style:{fontSize:20}},"\uD83D\uDCE2"),
-    React.createElement('div',{style:{flex:1,minWidth:0}},
-      React.createElement('div',{style:{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)"}},`Sponsored · ${ad.tag}`),
-      React.createElement('div',{style:{fontSize:12,fontWeight:600,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},ad.headline),
-    ),
-    React.createElement('button',{style:{padding:"5px 10px",borderRadius:7,background:"var(--ink)",color:"white",fontSize:11,fontWeight:600,flexShrink:0}},ad.cta),
-    React.createElement('button',{onClick:onDismiss,style:{position:"absolute",top:6,right:8,fontSize:14,color:"var(--muted)",background:"none",border:"none",lineHeight:1,cursor:"pointer"}},"×")
-  );
-}
-function AdInline() {
-  const ad=AD_COPY[2];
-  return React.createElement('div',{style:{background:"var(--card)",border:"1px dashed #e8d9c4",borderRadius:10,padding:"9px 13px",margin:"6px 0",display:"flex",alignItems:"center",gap:10}},
-    React.createElement('span',{style:{fontSize:14}},"💡"),
-    React.createElement('div',{style:{flex:1,fontSize:12,color:"var(--ink)"}},
-      React.createElement('span',{style:{color:"var(--muted)",fontSize:10}},"Ad · "),
-      ad.headline," — ",
-      React.createElement('span',{style:{color:"var(--accent)",fontWeight:600}},ad.cta)
-    )
-  );
-}
 
 // ─── MODALS ───────────────────────────────────────────────────────────────────
 function ModalWrap({children,onClose}) {
@@ -498,7 +457,7 @@ function AuthPage({mode:im,onAuth,onBack}) {
         } else {
           const cred=await window.__fb.auth.createUserWithEmailAndPassword(email.trim(),pw);
           const admin=isAdmin(email.trim().toLowerCase());
-          const profile={email:email.trim().toLowerCase(),name:name.trim(),plan:admin?"cloud":null,billing:"monthly",role:admin?"admin":undefined,joinedAt:todayStr()};
+          const profile={email:email.trim().toLowerCase(),name:name.trim(),plan:"cloud",role:admin?"admin":undefined,joinedAt:todayStr()};
           await fsSet('users',cred.user.uid,profile,false);
           onAuth({uid:cred.user.uid,...profile});
         }
@@ -523,7 +482,7 @@ function AuthPage({mode:im,onAuth,onBack}) {
       if(users[email.toLowerCase()]){setErr("Email already registered.");setLoading(false);return;}
       const uid=`u_${Date.now()}`;
       const admin=isAdmin(email.toLowerCase());
-      const u={uid,email:email.toLowerCase(),name:name.trim(),password:btoa(pw),plan:admin?"cloud":null,billing:"monthly",role:admin?"admin":undefined,joinedAt:todayStr()};
+      const u={uid,email:email.toLowerCase(),name:name.trim(),password:btoa(pw),plan:"cloud",role:admin?"admin":undefined,joinedAt:todayStr()};
       users[email.toLowerCase()]=u; await saveUsers(users);
       if(admin) await saveAuth({uid:u.uid,email:u.email,name:u.name,plan:u.plan,billing:u.billing,role:u.role});
       onAuth(u);
@@ -597,118 +556,60 @@ function AuthPage({mode:im,onAuth,onBack}) {
 
 // ─── ONBOARDING ───────────────────────────────────────────────────────────────
 function OnboardingPage({user,onComplete}) {
-  const [step,setStep]=useState(1);
   const [name,setName]=useState(user.name||"");
-  const [dob,setDob]=useState("");
-  const [height,setHeight]=useState("");
-  const [gender,setGender]=useState("");
-  const [plan,setPlan]=useState("cloud");
-  const [billing,setBilling]=useState("monthly");
-  const [dc,setDc]=useState(false);
-  const [ac,setAc]=useState(false);
+  const [dob,setDob]=useState(user.dob||"");
+  const [gender,setGender]=useState(user.gender||"");
+  const [err,setErr]=useState("");
 
   const proceed=async()=>{
-    if(plan==="free"&&(!dc||!ac)) return;
+    if(!name.trim()){setErr("Please enter your name.");return;}
     const admin=isAdmin(user.email);
-    const finalPlan=admin?"cloud":plan;
-    const trimmedName=name.trim()||user.email.split("@")[0];
+    const trimmedName=name.trim();
     const users=await loadUsers();
-    const u={...users[user.email],name:trimmedName,dob,height,gender,plan:finalPlan,billing,role:admin?"admin":undefined,joinedAt:users[user.email]?.joinedAt||todayStr()};
+    const u={...users[user.email],name:trimmedName,dob,gender,plan:"cloud",role:admin?"admin":undefined,joinedAt:users[user.email]?.joinedAt||todayStr()};
     users[user.email]=u; await saveUsers(users);
-    const full={...user,name:trimmedName,dob,height,gender,plan:finalPlan,billing,role:u.role};
+    const full={...user,name:trimmedName,dob,gender,plan:"cloud",role:u.role};
     await saveAuth(full);
     onComplete(full);
   };
 
-  const pl=(p)=>{ const P=PRICING[p]; return p==="free"?"Free forever":billing==="monthly"?`$${P.monthly}/mo`:`$${P.yearly}/yr`; };
-  const PLANS=[
-    {key:"free",emoji:"🌱",label:"Free",sub:"Ads · data shared to fund the product",color:"#81b29a"},
-    {key:"local",emoji:"💾",label:"Local Pro",sub:"On this device · no ads · offline",color:"#c4a882"},
-    {key:"cloud",emoji:"☁️",label:"Cloud Pro",sub:"Private cloud · no ads · multi-device",color:"var(--accent)"},
-  ];
-
-  const inp={style:{width:"100%",padding:"11px 14px",border:"1.5px solid var(--border)",borderRadius:12,fontSize:14,outline:"none",background:"var(--card)",color:"var(--ink)",fontFamily:"inherit",boxSizing:"border-box"}};
   const GENDERS=["Male","Female","Non-binary","Prefer not to say"];
+  const inp={style:{width:"100%",padding:"13px 15px",border:"1.5px solid var(--border)",borderRadius:14,fontSize:15,outline:"none",background:"var(--bg)",color:"var(--ink)",fontFamily:"'DM Sans',sans-serif",marginTop:5}};
 
-  const header=React.createElement('div',{style:{display:"flex",alignItems:"center",gap:8,marginBottom:24}},
-    React.createElement('span',{style:{fontSize:20,color:"var(--accent)",fontFamily:"'Lora',serif",fontWeight:700}},"◆"),
-    React.createElement('span',{style:{fontFamily:"'Lora',serif",fontWeight:700,fontSize:18}},"Momentum")
-  );
-  const steps=React.createElement('div',{style:{display:"flex",gap:6,marginBottom:24}},
-    [1,2].map(s=>React.createElement('div',{key:s,style:{height:4,flex:1,borderRadius:2,background:step>=s?"var(--accent)":"var(--border)",transition:"background .3s"}}))
-  );
-
-  if(step===1) return React.createElement('div',{style:{minHeight:"100%",background:"var(--bg)",padding:"calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom))"}},
-    header, steps,
-    React.createElement('h2',{style:{fontFamily:"'Lora',serif",fontSize:22,fontWeight:700,marginBottom:4}},"Let's set up your profile"),
-    React.createElement('p',{style:{fontSize:13,color:"var(--muted)",marginBottom:24}},"Tell us a bit about yourself. Only your name is required."),
-
-    React.createElement('div',{style:{marginBottom:14}},
-      React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:6}},"Full Name *"),
-      React.createElement('input',{...inp,placeholder:"e.g. Alex Johnson",value:name,onChange:e=>setName(e.target.value)})
-    ),
-    React.createElement('div',{style:{marginBottom:14}},
-      React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:6}},"Date of Birth"),
-      React.createElement('input',{...inp,type:"date",value:dob,onChange:e=>setDob(e.target.value),style:{...inp.style,colorScheme:"dark light"}})
-    ),
-    React.createElement('div',{style:{marginBottom:14}},
-      React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:6}},"Height"),
-      React.createElement('input',{...inp,placeholder:"e.g. 5'10\" or 178 cm",value:height,onChange:e=>setHeight(e.target.value)})
-    ),
-    React.createElement('div',{style:{marginBottom:28}},
-      React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:8}},"Gender"),
-      React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:8}},
-        GENDERS.map(g=>React.createElement('button',{key:g,onClick:()=>setGender(gender===g?"":g),style:{padding:"8px 16px",borderRadius:20,fontSize:13,border:`1.5px solid ${gender===g?"var(--accent)":"var(--border)"}`,background:gender===g?"var(--accent)":"var(--card)",color:gender===g?"white":"var(--ink)",fontFamily:"inherit",cursor:"pointer",transition:"all .15s"}},g))
-      )
-    ),
-    React.createElement('button',{onClick:()=>{if(name.trim()||user.email)setStep(2);},disabled:false,style:{width:"100%",padding:"15px",borderRadius:14,background:"var(--accent)",color:"white",fontSize:15,fontWeight:700,border:"none",cursor:"pointer",opacity:name.trim()?1:.5}},"Continue →")
-  );
-
-  return React.createElement('div',{style:{minHeight:"100%",background:"var(--bg)",padding:"calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom))"}},
-    header, steps,
-    React.createElement('div',{style:{display:"flex",alignItems:"center",gap:10,marginBottom:20}},
-      React.createElement('button',{onClick:()=>setStep(1),style:{fontSize:20,color:"var(--muted)",background:"none",border:"none",cursor:"pointer",lineHeight:1}},"←"),
-      React.createElement('div',null,
-        React.createElement('h2',{style:{fontFamily:"'Lora',serif",fontSize:22,fontWeight:700,margin:0}},`Hi ${name.trim()||"there"} 👋`),
-        React.createElement('p',{style:{fontSize:13,color:"var(--muted)",margin:"2px 0 0"}},"Choose how your data is stored.")
-      )
-    ),
-    React.createElement('div',{style:{display:"inline-flex",background:"var(--accent-light)",border:"1px solid var(--border)",borderRadius:30,padding:3,gap:2,marginBottom:16}},
-      ["monthly","yearly"].map(b=>React.createElement('button',{key:b,onClick:()=>setBilling(b),style:{padding:"7px 16px",borderRadius:26,fontSize:12,fontWeight:600,background:billing===b?"var(--ink)":"transparent",color:billing===b?"white":"var(--muted)",border:"none",cursor:"pointer",fontFamily:"inherit"}},b.charAt(0).toUpperCase()+b.slice(1)))
-    ),
-    PLANS.map(p=>React.createElement('div',{key:p.key,onClick:()=>setPlan(p.key),style:{border:`2px solid ${plan===p.key?p.color:"var(--border)"}`,borderRadius:14,padding:"13px 15px",cursor:"pointer",background:plan===p.key?`${p.color}08`:"var(--card)",transition:"all .15s",display:"flex",alignItems:"center",gap:12,marginBottom:8}},
-      React.createElement('span',{style:{fontSize:22}},p.emoji),
-      React.createElement('div',{style:{flex:1}},
-        React.createElement('div',{style:{fontWeight:600,fontSize:14}},p.label),
-        React.createElement('div',{style:{fontSize:12,color:"var(--muted)"}},p.sub)
+  return React.createElement('div',{style:{minHeight:"100%",background:"var(--bg)",display:"flex",flexDirection:"column",padding:"0 24px 24px",paddingBottom:"calc(24px + env(safe-area-inset-bottom))"}},
+    React.createElement('div',{style:{paddingTop:"calc(20px + env(safe-area-inset-top))"}},
+      React.createElement('div',{style:{display:"flex",alignItems:"center",gap:8,marginBottom:32}},
+        React.createElement('span',{style:{fontSize:22,color:"var(--accent)",fontFamily:"'Lora',serif",fontWeight:700}},"◆"),
+        React.createElement('span',{style:{fontFamily:"'Lora',serif",fontWeight:700,fontSize:19}},"Momentum")
       ),
-      React.createElement('div',{style:{fontFamily:"'Lora',serif",fontWeight:700,fontSize:14,color:p.color}},pl(p.key)),
-      React.createElement('div',{style:{width:18,height:18,borderRadius:"50%",border:`2px solid ${plan===p.key?p.color:"var(--border)"}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}},
-        plan===p.key&&React.createElement('div',{style:{width:8,height:8,borderRadius:"50%",background:p.color}})
-      )
-    )),
-    plan==="free"&&React.createElement('div',{style:{background:"var(--accent-light)",border:"1px solid var(--border)",borderRadius:12,padding:"14px",margin:"12px 0"}},
-      React.createElement('div',{style:{fontSize:13,fontWeight:700,marginBottom:8,color:"var(--ink)"}},"⚠️ Before you continue"),
-      React.createElement('label',{style:{display:"flex",gap:10,alignItems:"flex-start",fontSize:12,marginBottom:8,cursor:"pointer"}},
-        React.createElement('input',{type:"checkbox",checked:dc,onChange:e=>setDc(e.target.checked),style:{marginTop:2,flexShrink:0}}),
-        React.createElement('span',null,"I agree my habit data may be used for product improvement and targeted marketing.")
+      React.createElement('h2',{style:{fontFamily:"'Lora',serif",fontSize:26,fontWeight:700,marginBottom:6}},"Let's set up your profile"),
+      React.createElement('p',{style:{fontSize:14,color:"var(--muted)",marginBottom:28,lineHeight:1.6}},"Just a few details to personalise your experience. Your name is required."),
+
+      React.createElement('div',{style:{marginBottom:16}},
+        React.createElement('label',{style:{fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)"}},"Full Name *"),
+        React.createElement('input',{...inp,placeholder:"e.g. Alex Johnson",value:name,onChange:e=>{setName(e.target.value);setErr("");}})
       ),
-      React.createElement('label',{style:{display:"flex",gap:10,alignItems:"flex-start",fontSize:12,cursor:"pointer"}},
-        React.createElement('input',{type:"checkbox",checked:ac,onChange:e=>setAc(e.target.checked),style:{marginTop:2,flexShrink:0}}),
-        React.createElement('span',null,"I agree to see personalized ads within Momentum.")
-      )
-    ),
-    React.createElement('button',{onClick:proceed,disabled:plan==="free"&&(!dc||!ac),style:{width:"100%",marginTop:16,padding:"15px",borderRadius:14,background:plan==="free"?"#81b29a":plan==="local"?"#c4a882":"#c4622d",color:"white",fontSize:15,fontWeight:700,border:"none",cursor:"pointer",opacity:(plan==="free"&&(!dc||!ac))?.4:1}},`Start with ${PRICING[plan].label} →`)
+      React.createElement('div',{style:{marginBottom:16}},
+        React.createElement('label',{style:{fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)"}},"Date of Birth"),
+        React.createElement('input',{...inp,type:"date",value:dob,onChange:e=>setDob(e.target.value),style:{...inp.style,colorScheme:"dark light"}})
+      ),
+      React.createElement('div',{style:{marginBottom:32}},
+        React.createElement('label',{style:{fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:10}},"Gender"),
+        React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:8}},
+          GENDERS.map(g=>React.createElement('button',{key:g,onClick:()=>setGender(gender===g?"":g),style:{padding:"9px 18px",borderRadius:22,fontSize:14,border:`1.5px solid ${gender===g?"var(--accent)":"var(--border)"}`,background:gender===g?"var(--accent)":"var(--card)",color:gender===g?"white":"var(--ink)",fontFamily:"inherit",cursor:"pointer",transition:"all .15s"}},g))
+        )
+      ),
+      err&&React.createElement('div',{style:{background:"var(--accent-light)",color:"var(--accent)",padding:"11px 14px",borderRadius:10,fontSize:13,marginBottom:16}},err),
+      React.createElement('button',{onClick:proceed,style:{width:"100%",padding:"15px",borderRadius:14,background:"var(--accent)",color:"white",fontSize:16,fontWeight:700,border:"none",cursor:"pointer",opacity:name.trim()?1:.5}},"Get started →")
+    )
   );
 }
 
 // ─── LANDING PAGE ─────────────────────────────────────────────────────────────
 function LandingPage({onSignup,onLogin}) {
-  const [billing,setBilling]=useState("monthly");
-  const PLANS=[
-    {key:"free",emoji:"🌱",name:"Free",price:"$0",sub:"Ad-supported",color:"#81b29a",features:["All habit features","Ads + data sharing","Server storage"]},
-    {key:"local",emoji:"💾",name:"Local Pro",price:billing==="monthly"?"$3/mo":"$29/yr",sub:billing==="yearly"?"Save $7":"Most private",color:"#c4a882",features:["On-device storage","No ads ever","Offline support"]},
-    {key:"cloud",emoji:"☁️",name:"Cloud Pro",price:billing==="monthly"?"$4/mo":"$35/yr",sub:billing==="yearly"?"Save $13":"Most popular",color:"var(--accent)",features:["Private cloud","No ads ever","Multi-device sync"],badge:true},
+  const FEATURES=[
+    ["🔥","Streak Tracking"],["📊","Weekly Reports"],["✎","Daily Notes"],
+    ["☁️","Cross-device Sync"],["☰","Drag to Reorder"],["🔔","Reminders"],
   ];
   return React.createElement('div',{style:{minHeight:"100%",background:"var(--bg)",overflowY:"auto",paddingBottom:"calc(24px + env(safe-area-inset-bottom))"}},
     // Nav
@@ -717,52 +618,31 @@ function LandingPage({onSignup,onLogin}) {
         React.createElement('span',{style:{fontSize:18,color:"var(--accent)",fontFamily:"'Lora',serif",fontWeight:700}},"◆"),
         React.createElement('span',{style:{fontFamily:"'Lora',serif",fontWeight:700,fontSize:17}},"Momentum")
       ),
-      React.createElement('button',{onClick:onLogin,style:{padding:"8px 18px",borderRadius:10,border:"1.5px solid #e8d9c4",background:"var(--card)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"Log in")
+      React.createElement('button',{onClick:onLogin,style:{padding:"8px 18px",borderRadius:10,border:"1.5px solid var(--border)",background:"var(--card)",color:"var(--ink)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"Log in")
     ),
     // Hero
-    React.createElement('div',{style:{textAlign:"center",padding:"40px 24px 28px"}},
-      React.createElement('div',{style:{display:"inline-block",background:"var(--accent-light)",border:"1px solid #e8d9c4",borderRadius:20,padding:"4px 14px",fontSize:11,fontWeight:700,color:"var(--accent)",marginBottom:16,textTransform:"uppercase",letterSpacing:".06em"}},"Daily Habit Tracker"),
+    React.createElement('div',{style:{textAlign:"center",padding:"48px 24px 32px"}},
+      React.createElement('div',{style:{display:"inline-block",background:"var(--accent-light)",border:"1px solid var(--border)",borderRadius:20,padding:"4px 14px",fontSize:11,fontWeight:700,color:"var(--accent)",marginBottom:16,textTransform:"uppercase",letterSpacing:".06em"}},"100% Free · No credit card"),
       React.createElement('h1',{style:{fontFamily:"'Lora',serif",fontSize:36,fontWeight:700,lineHeight:1.2,marginBottom:14,color:"var(--ink)"}},
         "Build habits that ",React.createElement('em',{style:{color:"var(--accent)"}},"actually stick.")
       ),
-      React.createElement('p',{style:{fontSize:15,color:"var(--muted)",lineHeight:1.65,marginBottom:28,maxWidth:320,margin:"0 auto 28px"}},"Track daily rituals, streaks, and progress — with full control over where your data lives."),
-      React.createElement('button',{onClick:onSignup,style:{width:"100%",maxWidth:320,padding:"16px",borderRadius:14,background:"var(--accent)",color:"white",fontSize:16,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 20px rgba(196,98,45,.3)"}},"Start for free →"),
-      React.createElement('button',{onClick:onLogin,style:{width:"100%",maxWidth:320,padding:"14px",borderRadius:14,border:"1.5px solid #e8d9c4",background:"var(--card)",fontSize:15,fontWeight:500,cursor:"pointer",fontFamily:"inherit",marginTop:10,color:"var(--ink)"}},"I have an account")
+      React.createElement('p',{style:{fontSize:15,color:"var(--muted)",lineHeight:1.65,maxWidth:300,margin:"0 auto 32px"}},"Track daily rituals, streaks and progress — free forever, synced across all your devices."),
+      React.createElement('button',{onClick:onSignup,style:{width:"100%",maxWidth:320,padding:"16px",borderRadius:14,background:"var(--accent)",color:"white",fontSize:16,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 20px rgba(196,98,45,.3)",display:"block",margin:"0 auto"}},"Get started — it's free →"),
+      React.createElement('button',{onClick:onLogin,style:{width:"100%",maxWidth:320,padding:"14px",borderRadius:14,border:"1.5px solid var(--border)",background:"var(--card)",fontSize:15,fontWeight:500,cursor:"pointer",fontFamily:"inherit",marginTop:10,color:"var(--ink)",display:"block",margin:"10px auto 0"}},"I already have an account")
     ),
-    // Features
-    React.createElement('div',{style:{background:"var(--accent-light)",borderTop:"1px solid #e8d9c4",borderBottom:"1px solid #e8d9c4",padding:"16px 24px"}},
+    // Features grid
+    React.createElement('div',{style:{background:"var(--card)",borderTop:"1px solid var(--border)",borderBottom:"1px solid var(--border)",padding:"20px 24px"}},
+      React.createElement('div',{style:{fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",textAlign:"center",marginBottom:14}},"Everything included, free"),
       React.createElement('div',{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
-        [["🔥","Streak Tracking"],["📊","6 Report Periods"],["✎","Daily Notes"],["📁","Export CSV & PDF"],["☰","Drag to Reorder"],["🔒","Your Data, Your Rules"]].map(([e,t])=>
-          React.createElement('div',{key:t,style:{display:"flex",alignItems:"center",gap:7,fontSize:13,fontWeight:500}},
-            React.createElement('span',null,e),React.createElement('span',null,t)
-          )
-        )
+        FEATURES.map(([e,t])=>React.createElement('div',{key:t,style:{display:"flex",alignItems:"center",gap:8,fontSize:13,fontWeight:500,color:"var(--ink)"}},
+          React.createElement('span',null,e),React.createElement('span',null,t)
+        ))
       )
     ),
-    // Pricing
-    React.createElement('div',{style:{padding:"32px 20px"}},
-      React.createElement('h2',{style:{fontFamily:"'Lora',serif",fontSize:24,fontWeight:700,textAlign:"center",marginBottom:6}},"Simple pricing"),
-      React.createElement('p',{style:{fontSize:13,color:"var(--muted)",textAlign:"center",marginBottom:20}},"No hidden fees. Cancel anytime."),
-      React.createElement('div',{style:{display:"flex",justifyContent:"center",marginBottom:20}},
-        React.createElement('div',{style:{display:"inline-flex",background:"var(--accent-light)",border:"1px solid #e8d9c4",borderRadius:30,padding:3,gap:2}},
-          ["monthly","yearly"].map(b=>React.createElement('button',{key:b,onClick:()=>setBilling(b),style:{padding:"7px 16px",borderRadius:26,fontSize:12,fontWeight:600,background:billing===b?"var(--ink)":"transparent",color:billing===b?"white":"var(--muted)",border:"none",cursor:"pointer",fontFamily:"inherit"}},b.charAt(0).toUpperCase()+b.slice(1)))
-        )
-      ),
-      PLANS.map(p=>React.createElement('div',{key:p.key,style:{background:"var(--card)",borderRadius:16,padding:"20px",marginBottom:12,border:`2px solid ${p.badge?"var(--accent)":"var(--sand)"}`,position:"relative",boxShadow:p.badge?"0 4px 20px rgba(196,98,45,.10)":"none"}},
-        p.badge&&React.createElement('div',{style:{position:"absolute",top:-11,right:16,background:"var(--accent)",color:"white",fontSize:10,fontWeight:700,padding:"3px 12px",borderRadius:20,textTransform:"uppercase"}},"Popular"),
-        React.createElement('div',{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}},
-          React.createElement('div',null,
-            React.createElement('div',{style:{fontSize:22,marginBottom:4}},p.emoji),
-            React.createElement('div',{style:{fontFamily:"'Lora',serif",fontWeight:700,fontSize:16}},p.name),
-            React.createElement('div',{style:{fontSize:11,color:p.color,fontWeight:600}},p.sub)
-          ),
-          React.createElement('div',{style:{fontFamily:"'Lora',serif",fontWeight:700,fontSize:22,color:p.color}},p.price)
-        ),
-        p.features.map(f=>React.createElement('div',{key:f,style:{display:"flex",alignItems:"center",gap:7,fontSize:13,marginBottom:5}},
-          React.createElement('span',{style:{color:p.color,fontWeight:700}},"✓"),f
-        )),
-        React.createElement('button',{onClick:onSignup,style:{width:"100%",padding:"12px",borderRadius:12,marginTop:14,background:p.badge?"var(--accent)":"var(--accent-light)",color:p.badge?"white":"var(--ink)",fontSize:14,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit"}},"Get started")
-      ))
+    // Social proof / tagline
+    React.createElement('div',{style:{textAlign:"center",padding:"28px 24px"}},
+      React.createElement('p',{style:{fontSize:13,color:"var(--muted)",lineHeight:1.7}},"No subscriptions. No paywalls. Just habit tracking that works — on every device you own."),
+      React.createElement('button',{onClick:onSignup,style:{marginTop:16,padding:"12px 32px",borderRadius:12,background:"var(--accent-light)",color:"var(--accent)",fontSize:14,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit"}},"Create free account →")
     )
   );
 }
@@ -771,11 +651,7 @@ function LandingPage({onSignup,onLogin}) {
 function AdminPanel({onClose}) {
   const [users,setUsers]=useState({});
   useEffect(()=>{ loadUsers().then(u=>setUsers(u||{})); },[]);
-
   const list=Object.values(users).sort((a,b)=>(b.joinedAt||"").localeCompare(a.joinedAt||""));
-  const counts=list.reduce((a,u)=>{const p=u.plan||"none";a[p]=(a[p]||0)+1;return a;},{});
-  const PC={free:"#81b29a",local:"#c4a882",cloud:"#c4622d",none:"#b5b5a9"};
-  const PE={free:"🌱",local:"💾",cloud:"☁️",none:"—"};
 
   return React.createElement('div',{style:{background:"var(--bg)",minHeight:"100%",paddingBottom:"calc(24px + env(safe-area-inset-bottom))"}},
     React.createElement('div',{style:{display:"flex",alignItems:"center",gap:12,padding:"calc(16px + env(safe-area-inset-top)) 18px 16px",background:"var(--card)",borderBottom:"1px solid var(--border)",position:"sticky",top:0,zIndex:10}},
@@ -787,30 +663,30 @@ function AdminPanel({onClose}) {
       React.createElement('span',{style:{fontSize:18}},"🛡️")
     ),
     React.createElement('div',{style:{padding:"16px"}},
-      React.createElement('div',{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}},
-        [["cloud","☁️ Cloud"],["local","💾 Local"],["free","🌱 Free"]].map(([p,l])=>
-          React.createElement('div',{key:p,style:{background:"var(--card)",borderRadius:12,padding:"12px",textAlign:"center",border:`1.5px solid ${PC[p]}33`}},
-            React.createElement('div',{style:{fontSize:22,fontWeight:700,color:PC[p]}},(counts[p]||0)),
-            React.createElement('div',{style:{fontSize:11,color:"var(--muted)",marginTop:2}},l)
+      React.createElement('div',{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}},
+        [["👥","Total Users",list.length],["📅","Newest",list[0]?.joinedAt||"—"]].map(([e,l,v])=>
+          React.createElement('div',{key:l,style:{background:"var(--card)",borderRadius:12,padding:"14px",textAlign:"center",border:"1px solid var(--border)"}},
+            React.createElement('div',{style:{fontSize:22,fontWeight:700,color:"var(--accent)",fontFamily:"'Lora',serif"}},typeof v==="number"?v:e),
+            React.createElement('div',{style:{fontSize:11,color:"var(--muted)",marginTop:3}},l),
+            typeof v!=="number"&&React.createElement('div',{style:{fontSize:12,fontWeight:600,color:"var(--ink)",marginTop:2}},v)
           )
         )
       ),
       list.length===0
         ? React.createElement('div',{style:{textAlign:"center",padding:"32px",color:"var(--muted)",fontSize:14}},"No users yet.")
-        : list.map(u=>React.createElement('div',{key:u.uid,style:{background:"var(--card)",borderRadius:14,padding:"14px 16px",marginBottom:10,border:"1px solid var(--border)"}},
+        : list.map(u=>React.createElement('div',{key:u.uid||u.email,style:{background:"var(--card)",borderRadius:14,padding:"14px 16px",marginBottom:10,border:"1px solid var(--border)"}},
             React.createElement('div',{style:{display:"flex",alignItems:"center",gap:10}},
-              React.createElement('div',{style:{width:36,height:36,borderRadius:"50%",background:`${PC[u.plan||"none"]}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}},PE[u.plan||"none"]),
+              React.createElement('div',{style:{width:38,height:38,borderRadius:"50%",background:"var(--accent-light)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"var(--accent)",flexShrink:0}},(u.name||u.email||"?").charAt(0).toUpperCase()),
               React.createElement('div',{style:{flex:1,minWidth:0}},
                 React.createElement('div',{style:{fontWeight:600,fontSize:14,display:"flex",alignItems:"center",gap:6}},
                   u.name||"—",
                   u.role==="admin"&&React.createElement('span',{style:{fontSize:10,background:"var(--accent)",color:"white",borderRadius:20,padding:"1px 7px",fontWeight:700}},"ADMIN")
                 ),
-                React.createElement('div',{style:{fontSize:12,color:"var(--muted)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},u.email)
+                React.createElement('div',{style:{fontSize:12,color:"var(--muted)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},u.email),
+                u.dob&&React.createElement('div',{style:{fontSize:11,color:"var(--muted)"}},`DOB: ${u.dob}`),
+                u.gender&&React.createElement('div',{style:{fontSize:11,color:"var(--muted)"}},`Gender: ${u.gender}`)
               ),
-              React.createElement('div',{style:{textAlign:"right",flexShrink:0}},
-                React.createElement('div',{style:{fontSize:12,fontWeight:600,color:PC[u.plan||"none"]}},PRICING[u.plan]?.label||"No plan"),
-                React.createElement('div',{style:{fontSize:11,color:"var(--muted)"}},u.joinedAt||"—")
-              )
+              React.createElement('div',{style:{fontSize:11,color:"var(--muted)",flexShrink:0}},u.joinedAt||"—")
             )
           ))
     )
@@ -819,8 +695,6 @@ function AdminPanel({onClose}) {
 
 // ─── ACCOUNT PAGE ─────────────────────────────────────────────────────────────
 function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenAdmin}) {
-  const [billing,setBilling]=useState(user.billing||"monthly");
-  const [saved,setSaved]=useState(false);
   const [curTheme,setCurTheme]=useState(localStorage.getItem('mo:theme')||'light');
   const [editProfile,setEditProfile]=useState(false);
   const [pName,setPName]=useState(user.name||"");
@@ -829,14 +703,6 @@ function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenA
   const [pGender,setPGender]=useState(user.gender||"");
   const [profileSaved,setProfileSaved]=useState(false);
   const changeTheme=name=>{setCurTheme(name);applyTheme(name);localStorage.setItem('mo:theme',name);};
-  const PC={free:"#81b29a",local:"#c4a882",cloud:"#c4622d"};
-  const PE={free:"🌱",local:"💾",cloud:"☁️"};
-  const switchPlan=async(p)=>{
-    const users=await loadUsers();
-    const u={...users[user.email],plan:p,billing};
-    users[user.email]=u; await saveUsers(users); await saveAuth({...user,plan:p,billing});
-    onPlanChange({...user,plan:p,billing}); setSaved(true); setTimeout(()=>setSaved(false),2000);
-  };
   const saveProfile=async()=>{
     if(!pName.trim()) return;
     const updated={...user,name:pName.trim(),dob:pDob,height:pHeight,gender:pGender};
@@ -893,15 +759,6 @@ function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenA
               profileSaved&&React.createElement('div',{style:{fontSize:12,color:"var(--accent)",fontWeight:600,marginTop:6}},"✓ Profile saved!")
             )
       ),
-      React.createElement(Section,{title:"Current Plan"},
-        React.createElement('div',{style:{display:"flex",alignItems:"center",gap:12}},
-          React.createElement('span',{style:{fontSize:28}},PE[user.plan]),
-          React.createElement('div',null,
-            React.createElement('div',{style:{fontFamily:"'Lora',serif",fontSize:16,fontWeight:700,color:PC[user.plan]}},PRICING[user.plan].label),
-            React.createElement('div',{style:{fontSize:12,color:"var(--muted)"}},user.plan==="free"?"$0 — ad-supported":user.billing==="monthly"?`$${PRICING[user.plan].monthly}/month`:`$${PRICING[user.plan].yearly}/year`)
-          )
-        )
-      ),
       React.createElement(Section,{title:"Notifications"},
         React.createElement('button',{onClick:onNotifications,style:{width:"100%",padding:"11px",borderRadius:12,background:"var(--accent-light)",fontSize:14,fontWeight:600,border:"none",cursor:"pointer",textAlign:"left",fontFamily:"inherit",display:"flex",justifyContent:"space-between",alignItems:"center"}},
           React.createElement('span',null,"🔔 Manage Notifications"),
@@ -914,34 +771,6 @@ function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenA
             React.createElement('div',{style:{fontSize:22}},t.emoji),
             React.createElement('div',{style:{fontSize:10,fontWeight:600,color:t.ink,whiteSpace:"nowrap"}},t.label)
           ))
-        )
-      ),
-      React.createElement(Section,{title:"Change Plan"},
-        React.createElement('div',{style:{display:"flex",gap:6,marginBottom:12}},
-          ["monthly","yearly"].map(b=>React.createElement('button',{key:b,onClick:()=>setBilling(b),style:{padding:"6px 14px",borderRadius:20,fontSize:12,fontWeight:600,background:billing===b?"var(--ink)":"var(--accent-light)",color:billing===b?"white":"var(--muted)",border:"none",cursor:"pointer",fontFamily:"inherit"}},b.charAt(0).toUpperCase()+b.slice(1)))
-        ),
-        [
-          {key:"free",emoji:"🌱",label:"Free",price:"$0",sub:"Ads · data sharing"},
-          {key:"local",emoji:"💾",label:"Local Pro",price:billing==="monthly"?`$${PRICING.local.monthly}/mo`:`$${PRICING.local.yearly}/yr`,sub:"Device only · no ads"},
-          {key:"cloud",emoji:"☁️",label:"Cloud Pro",price:billing==="monthly"?`$${PRICING.cloud.monthly}/mo`:`$${PRICING.cloud.yearly}/yr`,sub:"Private cloud · no ads"},
-        ].map(p=>React.createElement('div',{key:p.key,style:{display:"flex",alignItems:"center",gap:10,padding:"11px 12px",border:`1.5px solid ${user.plan===p.key?PC[p.key]:"var(--border)"}`,borderRadius:12,marginBottom:7,background:user.plan===p.key?`${PC[p.key]}18`:"var(--card)"}},
-          React.createElement('span',null,p.emoji),
-          React.createElement('div',{style:{flex:1}},
-            React.createElement('div',{style:{fontSize:13,fontWeight:600}},p.label),
-            React.createElement('div',{style:{fontSize:11,color:"var(--muted)"}},p.sub)
-          ),
-          React.createElement('div',{style:{fontWeight:700,fontSize:13,color:PC[p.key]}},p.price),
-          user.plan!==p.key
-            ? React.createElement('button',{onClick:()=>switchPlan(p.key),style:{padding:"5px 12px",borderRadius:8,background:"var(--accent-light)",border:"none",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}},"Switch")
-            : React.createElement('span',{style:{fontSize:11,color:PC[p.key],fontWeight:700}},"✓")
-        )),
-        saved&&React.createElement('div',{style:{fontSize:13,color:"var(--accent)",fontWeight:600,marginTop:6}},"✓ Plan updated!")
-      ),
-      user.plan==="free"&&React.createElement(Section,{title:"Data We Collect"},
-        React.createElement('div',{style:{background:"var(--accent-light)",border:"1px solid var(--border)",borderRadius:10,padding:"12px 14px"}},
-          React.createElement('ul',{style:{fontSize:12,color:"var(--muted)",paddingLeft:16,lineHeight:1.8}},
-            ["Habit names, categories & completion patterns","Usage frequency","Ad interaction data"].map(i=>React.createElement('li',{key:i},i))
-          )
         )
       ),
       isAdmin(user.email)&&React.createElement(Section,{title:"Admin"},
@@ -969,7 +798,6 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
   const [noteM,setNoteM]=useState(null);
   const [loaded,setLoaded]=useState(false);
   const [saveInd,setSaveInd]=useState(false);
-  const [bannerDismissed,setBD]=useState(false);
   const [installable,setInstallable]=useState(false);
   const [offline,setOffline]=useState(!navigator.onLine);
   const [updateReady,setUpdateReady]=useState(false);
@@ -977,10 +805,8 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
   const dragIdx=useRef(null),dragOvr=useRef(null);
   const [dragOverState,setDOS]=useState(null);
 
-  const isFree=user.plan==="free";
-
   useEffect(()=>{
-    loadUD(user.uid,user.plan).then(d=>{
+    loadUD(user.uid).then(d=>{
       if(d){
         // Migrate old format
         const ml={};
@@ -1009,12 +835,12 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
       window.removeEventListener('pwa-network',onNetwork);
       window.removeEventListener('pwa-update-available',onUpdate);
     };
-  },[user.uid,user.plan]);
+  },[user.uid]);
 
   const persist=useCallback(async(h,l)=>{
-    await saveUD(user.uid,user.plan,{habits:h,logs:l});
+    await saveUD(user.uid,{habits:h,logs:l});
     setSaveInd(true); setTimeout(()=>setSaveInd(false),1400);
-  },[user.uid,user.plan]);
+  },[user.uid]);
 
   const updH=h=>{setHabits(h);persist(h,logs);};
   const updL=l=>{setLogs(l);persist(habits,l);};
@@ -1044,8 +870,6 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
   const doneT=todayH.filter(h=>logs[h.id]?.dates?.[today]?.done).length;
   const bestStr=habits.length?Math.max(...habits.map(h=>streak(h,logs)),0):0;
 
-  const PC={free:"#81b29a",local:"#c4a882",cloud:"#c4622d"};
-
   if(!loaded) return React.createElement('div',{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"var(--bg)",fontFamily:"'Lora',serif",color:"var(--muted)",fontSize:16}},"◆ Loading…");
 
   // Bottom nav items
@@ -1067,8 +891,7 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
         React.createElement('div',{style:{display:"flex",alignItems:"center",gap:7}},
           React.createElement('span',{style:{fontSize:17,color:"var(--accent)",fontFamily:"'Lora',serif",fontWeight:700}},"◆"),
           React.createElement('span',{style:{fontFamily:"'Lora',serif",fontWeight:700,fontSize:16}},"Momentum"),
-          saveInd&&React.createElement('span',{style:{display:"inline-block",width:6,height:6,borderRadius:"50%",background:"#81b29a",animation:"fd 1.4s forwards"}}),
-          React.createElement('span',{style:{fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:8,background:PC[user.plan]+"22",color:PC[user.plan],border:`1px solid ${PC[user.plan]}44`}},PRICING[user.plan].label)
+          saveInd&&React.createElement('span',{style:{display:"inline-block",width:6,height:6,borderRadius:"50%",background:"#81b29a",animation:"fd 1.4s forwards"}})
         ),
         React.createElement('div',{style:{display:"flex",gap:8,alignItems:"center"}},
           React.createElement('button',{onClick:onOpenAccount,style:{width:30,height:30,borderRadius:"50%",background:"var(--accent-light)",border:"1.5px solid #e8d9c4",fontSize:12,fontWeight:700,color:"var(--ink)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}},user.name.charAt(0).toUpperCase()),
@@ -1082,9 +905,9 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
       React.createElement('div',{style:{padding:"14px 14px 0"}},
 
         // Install banner
-        installable&&!bannerDismissed&&React.createElement(InstallBanner,{
+        installable&&React.createElement(InstallBanner,{
           onInstall:()=>window.MomentumPWA?.triggerInstallPrompt().then(()=>setInstallable(false)),
-          onDismiss:()=>setBD(true)
+          onDismiss:()=>setInstallable(false)
         }),
 
         // Summary cards
@@ -1106,7 +929,6 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
             new Date().toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"})
           ),
           React.createElement('div',{style:{fontSize:11,color:"var(--muted)",marginBottom:10}},"☰ drag to reorder · ✎ tap to add a note"),
-          isFree&&React.createElement(AdBanner,{onDismiss:()=>{}}),
           todayH.length===0
             ? React.createElement('div',{style:{textAlign:"center",padding:"40px 20px",color:"var(--muted)"}},
                 React.createElement('div',{style:{fontSize:36,marginBottom:10}},"🌿"),
@@ -1116,7 +938,6 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
             : todayH.map((h,ti)=>{
                 const gi=habits.indexOf(h),done=logs[h.id]?.dates?.[today]?.done,note=logs[h.id]?.dates?.[today]?.note,str=streak(h,logs),wr=compRate(h,logs,weekDates(0));
                 return React.createElement('div',{key:h.id},
-                  isFree&&ti>0&&ti%3===0&&React.createElement(AdInline),
                   React.createElement('div',{
                     className:`h-row${dragOverState===gi?" dov":""}`,
                     style:{background:"var(--card)",borderRadius:12,padding:"12px 13px",marginBottom:8,display:"flex",alignItems:"center",gap:10,boxShadow:"0 1px 4px rgba(61,53,48,.06)",border:`2px solid ${dragOverState===gi?"#c4a882":"transparent"}`,opacity:done?.62:1,transition:"border .15s"},
@@ -1295,7 +1116,7 @@ function App() {
     if(!window.__fb) {
       // Fallback: localStorage (Firebase not configured)
       loadAuth().then(auth=>{
-        if(auth?.uid&&auth?.plan){setUser(auth);setScreen("app");}
+        if(auth?.uid&&auth?.name){setUser(auth);setScreen("app");}
         else if(auth?.uid){setUser(auth);setScreen("onboarding");}
         else setScreen("landing");
       });
@@ -1330,7 +1151,7 @@ function App() {
           ls.set(`mo:prof:${fbUser.uid}`,profile);
           const auth={uid:fbUser.uid,email:fbUser.email,...profile};
           setUser(auth);
-          setScreen(auth.plan?"app":"onboarding");
+          setScreen(auth.name?"app":"onboarding");
         } else {
           setUser({uid:fbUser.uid,email:fbUser.email,name:""});
           setScreen("onboarding");
@@ -1352,7 +1173,7 @@ function App() {
     React.createElement('span',null,"◆"),React.createElement('span',null,"Momentum")
   );
   if(screen==="landing") return React.createElement(LandingPage,{onSignup:()=>{setAuthMode("signup");setScreen("auth");},onLogin:()=>{setAuthMode("login");setScreen("auth");}});
-  if(screen==="auth")    return React.createElement(AuthPage,{mode:authMode,onAuth:u=>{setUser(u);setScreen(u.plan?"app":"onboarding");},onBack:()=>setScreen("landing")});
+  if(screen==="auth")    return React.createElement(AuthPage,{mode:authMode,onAuth:u=>{setUser(u);setScreen(u.name?"app":"onboarding");},onBack:()=>setScreen("landing")});
   if(screen==="confirmlink") return React.createElement(ConfirmLinkPage,{linkUrl:window.__pendingLinkUrl||location.href});
   if(screen==="onboarding") return React.createElement(OnboardingPage,{user,onComplete:u=>{setUser(u);setScreen("app");}});
   // HabitApp stays mounted for "app", "account", and "admin" screens so its
