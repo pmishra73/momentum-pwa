@@ -631,11 +631,12 @@ function LandingPage({onSignup,onLogin}) {
       React.createElement('button',{onClick:onLogin,style:{width:"100%",maxWidth:320,padding:"14px",borderRadius:14,border:"1.5px solid var(--border)",background:"var(--card)",fontSize:15,fontWeight:500,cursor:"pointer",fontFamily:"inherit",marginTop:10,color:"var(--ink)",display:"block",margin:"10px auto 0"}},"I already have an account")
     ),
     // Features grid
-    React.createElement('div',{style:{background:"var(--card)",borderTop:"1px solid var(--border)",borderBottom:"1px solid var(--border)",padding:"20px 24px"}},
-      React.createElement('div',{style:{fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",textAlign:"center",marginBottom:14}},"Everything included, free"),
-      React.createElement('div',{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}},
-        FEATURES.map(([e,t])=>React.createElement('div',{key:t,style:{display:"flex",alignItems:"center",gap:8,fontSize:13,fontWeight:500,color:"var(--ink)"}},
-          React.createElement('span',null,e),React.createElement('span',null,t)
+    React.createElement('div',{style:{borderTop:"1px solid var(--border)",borderBottom:"1px solid var(--border)",padding:"24px 20px",background:"var(--bg)"}},
+      React.createElement('div',{style:{fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",textAlign:"center",marginBottom:16}},"Everything included, free"),
+      React.createElement('div',{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}},
+        FEATURES.map(([e,t])=>React.createElement('div',{key:t,style:{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,padding:"16px 10px",background:"var(--card)",border:"1.5px solid var(--border)",borderRadius:14,textAlign:"center"}},
+          React.createElement('span',{style:{fontSize:26,lineHeight:1}},e),
+          React.createElement('span',{style:{fontSize:12,fontWeight:600,color:"var(--ink)",lineHeight:1.3}},t)
         ))
       )
     ),
