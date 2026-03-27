@@ -419,6 +419,7 @@ function AuthPage({mode:im,onAuth,onBack}) {
   const [err,setErr]=useState("");
   const [loading,setLoading]=useState(false);
   const [linkSent,setLinkSent]=useState(false);
+  const [resetSent,setResetSent]=useState(false);
 
   const handle=async()=>{
     if(!email.trim()) return setErr("Please enter your email.");
@@ -448,11 +449,15 @@ function AuthPage({mode:im,onAuth,onBack}) {
       try {
         if(mode==="login") {
           const cred=await window.__fb.auth.signInWithEmailAndPassword(email.trim(),pw);
-          const profile=await fsGet('users',cred.user.uid);
-          if(!profile){setErr("Account profile not found. Please sign up.");setLoading(false);return;}
+          // Load profile; if missing (e.g. signup was interrupted) recreate from auth data
+          let profile=await fsGet('users',cred.user.uid);
+          if(!profile) {
+            profile={email:cred.user.email,name:cred.user.displayName||"",plan:"cloud",joinedAt:todayStr()};
+            await fsSet('users',cred.user.uid,profile,false);
+          }
           const admin=isAdmin(cred.user.email);
-          const finalP=admin?{...profile,plan:"cloud",role:"admin"}:profile;
-          if(admin&&profile.plan!=="cloud") await fsSet('users',cred.user.uid,{plan:"cloud",role:"admin"});
+          const finalP=admin?{...profile,plan:"cloud",role:"admin"}:{...profile,plan:"cloud"};
+          if(admin&&profile.role!=="admin") await fsSet('users',cred.user.uid,{...finalP},false);
           onAuth({uid:cred.user.uid,email:cred.user.email,...finalP});
         } else {
           const cred=await window.__fb.auth.createUserWithEmailAndPassword(email.trim(),pw);
@@ -462,8 +467,21 @@ function AuthPage({mode:im,onAuth,onBack}) {
           onAuth({uid:cred.user.uid,...profile});
         }
       } catch(e) {
-        const msgs={'auth/email-already-in-use':'Email already registered.','auth/user-not-found':'No account with that email.','auth/wrong-password':'Incorrect password.','auth/invalid-email':'Invalid email address.','auth/too-many-requests':'Too many attempts. Try again later.','auth/invalid-credential':'Invalid email or password.'};
-        setErr(msgs[e.code]||e.message||"Something went wrong.");
+        if(e.code==='auth/email-already-in-use') {
+          // Switch to login and hint the user
+          setMode("login"); setPw("");
+          setErr("This email is already registered — please log in instead.");
+        } else {
+          const msgs={
+            'auth/user-not-found':'No account found with that email.',
+            'auth/wrong-password':'Incorrect password. Try again or reset it below.',
+            'auth/invalid-email':'Invalid email address.',
+            'auth/too-many-requests':'Too many attempts. Please wait a moment.',
+            'auth/invalid-credential':'Incorrect email or password. Try again or reset your password below.',
+            'auth/network-request-failed':'Network error. Check your connection.',
+          };
+          setErr(msgs[e.code]||e.message||"Something went wrong.");
+        }
       }
       setLoading(false); return;
     }
@@ -486,6 +504,20 @@ function AuthPage({mode:im,onAuth,onBack}) {
       users[email.toLowerCase()]=u; await saveUsers(users);
       if(admin) await saveAuth({uid:u.uid,email:u.email,name:u.name,plan:u.plan,billing:u.billing,role:u.role});
       onAuth(u);
+    }
+    setLoading(false);
+  };
+
+  const handleReset=async()=>{
+    if(!email.trim()) return setErr("Enter your email address first, then click 'Forgot password'.");
+    if(!window.__fb) return setErr("Password reset requires Firebase.");
+    setLoading(true); setErr("");
+    try {
+      await window.__fb.auth.sendPasswordResetEmail(email.trim());
+      setResetSent(true);
+    } catch(e) {
+      const msgs={'auth/user-not-found':'No account found with that email.','auth/invalid-email':'Invalid email address.','auth/too-many-requests':'Too many requests. Try again later.'};
+      setErr(msgs[e.code]||e.message||"Failed to send reset email.");
     }
     setLoading(false);
   };
@@ -531,6 +563,13 @@ function AuthPage({mode:im,onAuth,onBack}) {
 
           // ── Password flow ─────────────────────────────────────────────────
           : React.createElement(React.Fragment,null,
+              // Reset-sent confirmation banner
+              resetSent&&React.createElement('div',{style:{background:"#e8f5e9",border:"1.5px solid #a5d6a7",borderRadius:12,padding:"14px 16px",marginBottom:18,textAlign:"center"}},
+                React.createElement('div',{style:{fontSize:22,marginBottom:6}},"📧"),
+                React.createElement('div',{style:{fontWeight:700,fontSize:14,color:"#2e7d32",marginBottom:4}},"Reset link sent!"),
+                React.createElement('div',{style:{fontSize:13,color:"#388e3c",lineHeight:1.5}},`Check your inbox at `,React.createElement('b',null,email),`. Follow the link to set a new password.`),
+                React.createElement('button',{onClick:()=>setResetSent(false),style:{marginTop:10,fontSize:12,color:"var(--muted)",background:"none",border:"none",cursor:"pointer",textDecoration:"underline",fontFamily:"inherit"}},"Back to login")
+              ),
               React.createElement('div',{style:{marginBottom:14,display:mode==="signup"?"":"none"}},
                 React.createElement('label',{style:{fontSize:12,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em"}},"Full Name"),
                 React.createElement('input',inp({placeholder:"Your name",value:name,onChange:e=>setName(e.target.value)}))
@@ -539,15 +578,19 @@ function AuthPage({mode:im,onAuth,onBack}) {
                 React.createElement('label',{style:{fontSize:12,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em"}},"Email"),
                 React.createElement('input',inp({type:"email",placeholder:"you@example.com",value:email,onChange:e=>setEmail(e.target.value)}))
               ),
-              React.createElement('div',{style:{marginBottom:20}},
+              React.createElement('div',{style:{marginBottom:mode==="login"?6:20}},
                 React.createElement('label',{style:{fontSize:12,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em"}},"Password"),
                 React.createElement('input',inp({type:"password",placeholder:"Min 6 characters",value:pw,onChange:e=>setPw(e.target.value),onKeyDown:e=>e.key==="Enter"&&handle()}))
+              ),
+              // Forgot password — login mode only
+              mode==="login"&&window.__fb&&React.createElement('div',{style:{textAlign:"right",marginBottom:20}},
+                React.createElement('button',{onClick:handleReset,disabled:loading,style:{fontSize:12,color:"var(--accent)",fontWeight:600,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",textDecoration:"underline"}},"Forgot password?")
               ),
               err&&React.createElement('div',{style:{background:"var(--accent-light)",color:"var(--accent)",padding:"11px 14px",borderRadius:10,fontSize:13,marginBottom:16}},err),
               React.createElement('button',{onClick:handle,disabled:loading,style:{width:"100%",padding:"15px",borderRadius:14,background:"var(--accent)",color:"white",fontSize:16,fontWeight:700,border:"none",cursor:"pointer",opacity:loading?.7:1}},loading?"Please wait…":mode==="login"?"Log in →":"Create Account →"),
               React.createElement('div',{style:{textAlign:"center",marginTop:20,fontSize:14,color:"var(--muted)"}},
                 mode==="login"?"Don't have an account? ":"Already have an account? ",
-                React.createElement('button',{onClick:()=>{setMode(m=>m==="login"?"signup":"login");setErr("");},style:{color:"var(--accent)",fontWeight:600,textDecoration:"underline",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit"}},mode==="login"?"Sign up":"Log in")
+                React.createElement('button',{onClick:()=>{setMode(m=>m==="login"?"signup":"login");setErr("");setResetSent(false);},style:{color:"var(--accent)",fontWeight:600,textDecoration:"underline",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit"}},mode==="login"?"Sign up":"Log in")
               )
             )
     )
