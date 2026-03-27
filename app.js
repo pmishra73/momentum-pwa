@@ -12,6 +12,7 @@ const SCHED_OPTS  = ["Daily","Weekdays","Weekends","Custom"];
 const PERIOD_LABELS = { weekly:"Weekly",fortnightly:"Fortnightly",monthly:"Monthly",quarterly:"Quarterly",halfyearly:"Half-yearly",yearly:"Yearly" };
 const ADMIN_EMAILS  = ["mishraprasant73@gmail.com"];
 const isAdmin       = email => ADMIN_EMAILS.includes((email||"").toLowerCase());
+const GENDERS       = ["Male","Female","Non-binary","Prefer not to say"];
 
 // ─── THEMES ───────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -416,6 +417,8 @@ function AuthPage({mode:im,onAuth,onBack}) {
   const [email,setEmail]=useState("");
   const [pw,setPw]=useState("");
   const [name,setName]=useState("");
+  const [signupDob,setSignupDob]=useState("");
+  const [signupGender,setSignupGender]=useState("");
   const [err,setErr]=useState("");
   const [loading,setLoading]=useState(false);
   const [linkSent,setLinkSent]=useState(false);
@@ -462,7 +465,7 @@ function AuthPage({mode:im,onAuth,onBack}) {
         } else {
           const cred=await window.__fb.auth.createUserWithEmailAndPassword(email.trim(),pw);
           const admin=isAdmin(email.trim().toLowerCase());
-          const profile={email:email.trim().toLowerCase(),name:name.trim(),plan:"cloud",role:admin?"admin":undefined,joinedAt:todayStr()};
+          const profile={email:email.trim().toLowerCase(),name:name.trim(),dob:signupDob||"",gender:signupGender||"",plan:"cloud",role:admin?"admin":undefined,joinedAt:todayStr()};
           await fsSet('users',cred.user.uid,profile,false);
           onAuth({uid:cred.user.uid,...profile});
         }
@@ -500,7 +503,7 @@ function AuthPage({mode:im,onAuth,onBack}) {
       if(users[email.toLowerCase()]){setErr("Email already registered.");setLoading(false);return;}
       const uid=`u_${Date.now()}`;
       const admin=isAdmin(email.toLowerCase());
-      const u={uid,email:email.toLowerCase(),name:name.trim(),password:btoa(pw),plan:"cloud",role:admin?"admin":undefined,joinedAt:todayStr()};
+      const u={uid,email:email.toLowerCase(),name:name.trim(),dob:signupDob||"",gender:signupGender||"",password:btoa(pw),plan:"cloud",role:admin?"admin":undefined,joinedAt:todayStr()};
       users[email.toLowerCase()]=u; await saveUsers(users);
       if(admin) await saveAuth({uid:u.uid,email:u.email,name:u.name,plan:u.plan,billing:u.billing,role:u.role});
       onAuth(u);
@@ -578,9 +581,23 @@ function AuthPage({mode:im,onAuth,onBack}) {
                 React.createElement('label',{style:{fontSize:12,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em"}},"Email"),
                 React.createElement('input',inp({type:"email",placeholder:"you@example.com",value:email,onChange:e=>setEmail(e.target.value)}))
               ),
-              React.createElement('div',{style:{marginBottom:mode==="login"?6:20}},
+              React.createElement('div',{style:{marginBottom:6}},
                 React.createElement('label',{style:{fontSize:12,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em"}},"Password"),
                 React.createElement('input',inp({type:"password",placeholder:"Min 6 characters",value:pw,onChange:e=>setPw(e.target.value),onKeyDown:e=>e.key==="Enter"&&handle()}))
+              ),
+              // Optional DOB + Gender — signup only
+              React.createElement('div',{style:{display:mode==="signup"?"":"none",marginTop:14}},
+                React.createElement('div',{style:{fontSize:11,color:"var(--muted)",marginBottom:10,textAlign:"center"}},"Optional — helps us personalise your experience"),
+                React.createElement('div',{style:{marginBottom:10}},
+                  React.createElement('label',{style:{fontSize:12,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em"}},"Date of Birth"),
+                  React.createElement('input',inp({type:"date",value:signupDob,onChange:e=>setSignupDob(e.target.value),style:{width:"100%",padding:"13px 15px",border:"1.5px solid var(--border)",borderRadius:14,fontSize:15,outline:"none",background:"var(--bg)",color:"var(--ink)",fontFamily:"'DM Sans',sans-serif",marginTop:5,colorScheme:"dark light"}}))
+                ),
+                React.createElement('div',{style:{marginBottom:20}},
+                  React.createElement('label',{style:{fontSize:12,fontWeight:600,color:"var(--muted)",textTransform:"uppercase",letterSpacing:".06em",display:"block",marginBottom:8}},"Gender"),
+                  React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:8}},
+                    GENDERS.map(g=>React.createElement('button',{key:g,type:"button",onClick:()=>setSignupGender(signupGender===g?"":g),style:{padding:"8px 14px",borderRadius:20,fontSize:13,border:`1.5px solid ${signupGender===g?"var(--accent)":"var(--border)"}`,background:signupGender===g?"var(--accent)":"var(--card)",color:signupGender===g?"white":"var(--ink)",fontFamily:"inherit",cursor:"pointer",transition:"all .15s"}},g))
+                  )
+                )
               ),
               // Forgot password — login mode only
               mode==="login"&&window.__fb&&React.createElement('div',{style:{textAlign:"right",marginBottom:20}},
@@ -616,7 +633,6 @@ function OnboardingPage({user,onComplete}) {
     onComplete(full);
   };
 
-  const GENDERS=["Male","Female","Non-binary","Prefer not to say"];
   const inp={style:{width:"100%",padding:"13px 15px",border:"1.5px solid var(--border)",borderRadius:14,fontSize:15,outline:"none",background:"var(--bg)",color:"var(--ink)",fontFamily:"'DM Sans',sans-serif",marginTop:5}};
 
   return React.createElement('div',{style:{minHeight:"100%",background:"var(--bg)",display:"flex",flexDirection:"column",padding:"0 24px 24px",paddingBottom:"calc(24px + env(safe-area-inset-bottom))"}},
@@ -694,10 +710,46 @@ function LandingPage({onSignup,onLogin}) {
 // ─── ADMIN PANEL ──────────────────────────────────────────────────────────────
 function AdminPanel({onClose}) {
   const [users,setUsers]=useState({});
+  const [showInvite,setShowInvite]=useState(false);
+  const [inviteEmail,setInviteEmail]=useState("");
+  const [inviteMsg,setInviteMsg]=useState("");
+  const [inviteErr,setInviteErr]=useState("");
+  const [inviteLoading,setInviteLoading]=useState(false);
+  const [confirmDel,setConfirmDel]=useState(null);
   useEffect(()=>{ loadUsers().then(u=>setUsers(u||{})); },[]);
   const list=Object.values(users).sort((a,b)=>(b.joinedAt||"").localeCompare(a.joinedAt||""));
 
+  const sendInvite=async()=>{
+    if(!inviteEmail.trim()) return setInviteErr("Enter an email address.");
+    if(!window.__fb) return setInviteErr("Firebase required.");
+    setInviteLoading(true); setInviteErr("");
+    try {
+      const settings={url:location.href.split('?')[0],handleCodeInApp:true};
+      await window.__fb.auth.sendSignInLinkToEmail(inviteEmail.trim(),settings);
+      setInviteMsg(`✓ Invite sent to ${inviteEmail.trim()}`);
+      setInviteEmail(""); setShowInvite(false);
+    } catch(e) {
+      const msgs={'auth/invalid-email':'Invalid email.','auth/too-many-requests':'Too many requests. Try again later.'};
+      setInviteErr(msgs[e.code]||e.message||"Failed to send.");
+    }
+    setInviteLoading(false);
+  };
+
+  const removeUser=async(uid)=>{
+    try {
+      if(window.__fb) {
+        await window.__fb.db.collection('users').doc(uid).delete();
+        await window.__fb.db.collection('userdata').doc(uid).delete().catch(()=>{});
+      }
+      setUsers(prev=>{ const n={...prev}; Object.keys(n).forEach(k=>{ if(n[k].uid===uid) delete n[k]; }); return n; });
+    } catch(e) { console.error('[Admin] remove failed:',e); }
+    setConfirmDel(null);
+  };
+
+  const inpStyle={width:"100%",padding:"11px 13px",border:"1.5px solid var(--border)",borderRadius:12,fontSize:14,outline:"none",background:"var(--bg)",color:"var(--ink)",fontFamily:"inherit",boxSizing:"border-box"};
+
   return React.createElement('div',{style:{background:"var(--bg)",minHeight:"100%",paddingBottom:"calc(24px + env(safe-area-inset-bottom))"}},
+    // Header
     React.createElement('div',{style:{display:"flex",alignItems:"center",gap:12,padding:"calc(16px + env(safe-area-inset-top)) 18px 16px",background:"var(--card)",borderBottom:"1px solid var(--border)",position:"sticky",top:0,zIndex:10}},
       React.createElement('button',{onClick:onClose,style:{fontSize:22,color:"var(--muted)",background:"none",border:"none",cursor:"pointer",lineHeight:1,marginRight:4}},"←"),
       React.createElement('div',{style:{flex:1}},
@@ -707,7 +759,8 @@ function AdminPanel({onClose}) {
       React.createElement('span',{style:{fontSize:18}},"🛡️")
     ),
     React.createElement('div',{style:{padding:"16px"}},
-      React.createElement('div',{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}},
+      // Stats + Invite button
+      React.createElement('div',{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}},
         [["👥","Total Users",list.length],["📅","Newest",list[0]?.joinedAt||"—"]].map(([e,l,v])=>
           React.createElement('div',{key:l,style:{background:"var(--card)",borderRadius:12,padding:"14px",textAlign:"center",border:"1px solid var(--border)"}},
             React.createElement('div',{style:{fontSize:22,fontWeight:700,color:"var(--accent)",fontFamily:"'Lora',serif"}},typeof v==="number"?v:e),
@@ -716,6 +769,19 @@ function AdminPanel({onClose}) {
           )
         )
       ),
+      // Success message
+      inviteMsg&&React.createElement('div',{style:{background:"#e8f5e9",border:"1px solid #a5d6a7",borderRadius:10,padding:"10px 14px",fontSize:13,color:"#2e7d32",marginBottom:12,fontWeight:600}},inviteMsg),
+      // Invite user section
+      React.createElement('button',{onClick:()=>{setShowInvite(v=>!v);setInviteErr("");},style:{width:"100%",padding:"11px",borderRadius:12,background:"var(--accent)",color:"white",fontSize:14,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit",marginBottom:showInvite?0:12}},
+        showInvite?"Cancel Invite":"+ Invite New User"
+      ),
+      showInvite&&React.createElement('div',{style:{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:"14px",marginBottom:12}},
+        React.createElement('div',{style:{fontSize:12,color:"var(--muted)",marginBottom:10}},"Send a sign-in link to invite someone. They'll create their account on first login."),
+        React.createElement('input',{type:"email",placeholder:"user@example.com",value:inviteEmail,onChange:e=>setInviteEmail(e.target.value),onKeyDown:e=>e.key==="Enter"&&sendInvite(),style:{...inpStyle,marginBottom:8}}),
+        inviteErr&&React.createElement('div',{style:{fontSize:12,color:"var(--accent)",marginBottom:8}},inviteErr),
+        React.createElement('button',{onClick:sendInvite,disabled:inviteLoading,style:{width:"100%",padding:"10px",borderRadius:10,background:"var(--accent)",color:"white",fontSize:13,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit",opacity:inviteLoading?.6:1}},inviteLoading?"Sending…":"Send Invite Link")
+      ),
+      // User list
       list.length===0
         ? React.createElement('div',{style:{textAlign:"center",padding:"32px",color:"var(--muted)",fontSize:14}},"No users yet.")
         : list.map(u=>React.createElement('div',{key:u.uid||u.email,style:{background:"var(--card)",borderRadius:14,padding:"14px 16px",marginBottom:10,border:"1px solid var(--border)"}},
@@ -730,7 +796,18 @@ function AdminPanel({onClose}) {
                 u.dob&&React.createElement('div',{style:{fontSize:11,color:"var(--muted)"}},`DOB: ${u.dob}`),
                 u.gender&&React.createElement('div',{style:{fontSize:11,color:"var(--muted)"}},`Gender: ${u.gender}`)
               ),
-              React.createElement('div',{style:{fontSize:11,color:"var(--muted)",flexShrink:0}},u.joinedAt||"—")
+              React.createElement('div',{style:{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}},
+                React.createElement('div',{style:{fontSize:11,color:"var(--muted)"}},u.joinedAt||"—"),
+                !isAdmin(u.email)&&React.createElement('button',{
+                  onClick:()=>setConfirmDel(confirmDel===u.uid?null:u.uid),
+                  style:{padding:"3px 10px",borderRadius:8,border:"1.5px solid var(--border)",fontSize:11,fontWeight:600,background:confirmDel===u.uid?"var(--accent)":"var(--card)",color:confirmDel===u.uid?"white":"var(--accent)",cursor:"pointer",fontFamily:"inherit"}},"Remove")
+              )
+            ),
+            // Confirm delete row
+            confirmDel===u.uid&&React.createElement('div',{style:{marginTop:10,padding:"10px 12px",background:"var(--accent-light)",borderRadius:10,display:"flex",alignItems:"center",gap:10}},
+              React.createElement('span',{style:{fontSize:12,color:"var(--ink)",flex:1}},"Remove this account? Their data will be deleted."),
+              React.createElement('button',{onClick:()=>removeUser(u.uid),style:{padding:"5px 12px",borderRadius:8,background:"var(--accent)",color:"white",fontSize:12,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit"}},"Confirm"),
+              React.createElement('button',{onClick:()=>setConfirmDel(null),style:{padding:"5px 10px",borderRadius:8,background:"var(--card)",color:"var(--muted)",fontSize:12,border:"1px solid var(--border)",cursor:"pointer",fontFamily:"inherit"}},"Cancel")
             )
           ))
     )
@@ -755,7 +832,6 @@ function AccountPage({user,onClose,onLogout,onPlanChange,onNotifications,onOpenA
     setEditProfile(false);
     setProfileSaved(true); setTimeout(()=>setProfileSaved(false),2000);
   };
-  const GENDERS=["Male","Female","Non-binary","Prefer not to say"];
   const inp={style:{width:"100%",padding:"10px 13px",border:"1.5px solid var(--border)",borderRadius:10,fontSize:14,outline:"none",background:"var(--bg)",color:"var(--ink)",fontFamily:"inherit",boxSizing:"border-box",marginBottom:10}};
 
   const Section=({title,children})=>React.createElement('div',{style:{background:"var(--card)",borderRadius:16,padding:"18px 18px",marginBottom:12}},
@@ -1149,12 +1225,82 @@ function HabitApp({user,onLogout,onOpenAccount,onPlanChange}) {
   );
 }
 
+// ─── PROFILE NAG MODAL ────────────────────────────────────────────────────────
+// Shown once per session when user hasn't filled in DOB or gender
+function ProfileNagModal({user,onSave,onDismiss}) {
+  const [dob,setDob]=useState(user.dob||"");
+  const [gender,setGender]=useState(user.gender||"");
+  const [saving,setSaving]=useState(false);
+  const save=async()=>{
+    setSaving(true);
+    const updated={...user,dob,gender};
+    await saveAuth(updated);
+    onSave(updated);
+  };
+  return React.createElement(ModalWrap,{onClose:onDismiss},
+    React.createElement('div',{style:{padding:"20px 20px 24px"}},
+      React.createElement('div',{style:{width:36,height:4,background:"var(--sand)",borderRadius:2,margin:"0 auto 18px"}}),
+      React.createElement('div',{style:{fontSize:20,textAlign:"center",marginBottom:6}},"👤"),
+      React.createElement('div',{style:{fontFamily:"'Lora',serif",fontSize:17,fontWeight:700,textAlign:"center",marginBottom:4}},"Complete your profile"),
+      React.createElement('div',{style:{fontSize:13,color:"var(--muted)",textAlign:"center",marginBottom:20,lineHeight:1.6}},"Add your date of birth and gender to personalise your experience."),
+      React.createElement('div',{style:{marginBottom:12}},
+        React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:6}},"Date of Birth"),
+        React.createElement('input',{type:"date",value:dob,onChange:e=>setDob(e.target.value),style:{width:"100%",padding:"11px 13px",border:"1.5px solid var(--border)",borderRadius:12,fontSize:14,outline:"none",background:"var(--bg)",color:"var(--ink)",fontFamily:"inherit",boxSizing:"border-box",colorScheme:"dark light"}})
+      ),
+      React.createElement('div',{style:{marginBottom:20}},
+        React.createElement('label',{style:{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted)",display:"block",marginBottom:8}},"Gender"),
+        React.createElement('div',{style:{display:"flex",flexWrap:"wrap",gap:8}},
+          GENDERS.map(g=>React.createElement('button',{key:g,onClick:()=>setGender(gender===g?"":g),style:{padding:"8px 16px",borderRadius:20,fontSize:13,border:`1.5px solid ${gender===g?"var(--accent)":"var(--border)"}`,background:gender===g?"var(--accent)":"var(--card)",color:gender===g?"white":"var(--ink)",fontFamily:"inherit",cursor:"pointer",transition:"all .15s"}},g))
+        )
+      ),
+      React.createElement('button',{onClick:save,disabled:saving,style:{width:"100%",padding:"13px",borderRadius:14,background:"var(--accent)",color:"white",fontSize:15,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit",marginBottom:8,opacity:saving?.7:1}},saving?"Saving…":"Save Profile"),
+      React.createElement('button',{onClick:onDismiss,style:{width:"100%",padding:"11px",borderRadius:14,background:"none",color:"var(--muted)",fontSize:13,border:"none",cursor:"pointer",fontFamily:"inherit"}},"Skip for now")
+    )
+  );
+}
+
+// ─── HOME SCREEN PROMPT ───────────────────────────────────────────────────────
+// Shown once per session to mobile browser users (not installed as PWA)
+function HomeScreenPrompt({onDismiss}) {
+  const isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const canInstall=!!window.MomentumPWA?.triggerInstallPrompt;
+  const doInstall=async()=>{
+    await window.MomentumPWA?.triggerInstallPrompt?.();
+    onDismiss();
+  };
+  return React.createElement(ModalWrap,{onClose:onDismiss},
+    React.createElement('div',{style:{padding:"20px 20px 28px"}},
+      React.createElement('div',{style:{width:36,height:4,background:"var(--sand)",borderRadius:2,margin:"0 auto 18px"}}),
+      React.createElement('div',{style:{fontSize:36,textAlign:"center",marginBottom:8}},"📲"),
+      React.createElement('div',{style:{fontFamily:"'Lora',serif",fontSize:18,fontWeight:700,textAlign:"center",marginBottom:6}},"Add to Home Screen"),
+      isIOS
+        ? React.createElement('div',{style:{fontSize:13,color:"var(--muted)",textAlign:"center",lineHeight:1.7,marginBottom:24}},
+            "Tap ",React.createElement('strong',{style:{color:"var(--ink)"}},"Share"),
+            " at the bottom of your browser, then choose ",
+            React.createElement('strong',{style:{color:"var(--ink)"}},"Add to Home Screen"),
+            " for the full app experience."
+          )
+        : React.createElement('div',{style:{fontSize:13,color:"var(--muted)",textAlign:"center",lineHeight:1.7,marginBottom:24}},"Install Momentum for fast access, offline support, and a distraction-free experience."),
+      !isIOS&&canInstall
+        ? React.createElement('button',{onClick:doInstall,style:{width:"100%",padding:"13px",borderRadius:14,background:"var(--accent)",color:"white",fontSize:15,fontWeight:700,border:"none",cursor:"pointer",fontFamily:"inherit",marginBottom:8}},"Add to Home Screen")
+        : isIOS&&React.createElement('div',{style:{display:"flex",justifyContent:"center",gap:6,alignItems:"center",marginBottom:20,fontSize:13,color:"var(--muted)"}},
+            React.createElement('span',null,"Tap"),
+            React.createElement('span',{style:{fontSize:18}},"⬆️"),
+            React.createElement('span',null,"Share → Add to Home Screen")
+          ),
+      React.createElement('button',{onClick:onDismiss,style:{width:"100%",padding:"11px",borderRadius:14,background:"none",color:"var(--muted)",fontSize:13,border:"none",cursor:"pointer",fontFamily:"inherit"}},"Maybe later")
+    )
+  );
+}
+
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 function App() {
   const [screen,setScreen]=useState("loading");
   const [authMode,setAuthMode]=useState("signup");
   const [user,setUser]=useState(null);
   const [showNotif,setShowNotif]=useState(false);
+  const [showProfileNag,setShowProfileNag]=useState(false);
+  const [showHomePrompt,setShowHomePrompt]=useState(false);
 
   useEffect(()=>{
     if(!window.__fb) {
@@ -1213,6 +1359,31 @@ function App() {
     }
   },[screen]);
 
+  // Profile nag: once per session when DOB or gender is missing
+  useEffect(()=>{
+    if(screen==="app"&&user&&(!user.dob||!user.gender)){
+      const key='mo:profilenag:'+todayStr();
+      if(!sessionStorage.getItem(key)){
+        sessionStorage.setItem(key,'1');
+        const t=setTimeout(()=>setShowProfileNag(true),1200);
+        return ()=>clearTimeout(t);
+      }
+    }
+  },[screen,user]);
+
+  // Home screen prompt: once per session for mobile browser users
+  useEffect(()=>{
+    if(screen==="app"){
+      const isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+      const isStandalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
+      if(isMobile&&!isStandalone&&!sessionStorage.getItem('mo:hsprompt')){
+        sessionStorage.setItem('mo:hsprompt','1');
+        const t=setTimeout(()=>setShowHomePrompt(true),3000);
+        return ()=>clearTimeout(t);
+      }
+    }
+  },[screen]);
+
   if(screen==="loading") return React.createElement('div',{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"var(--accent)",color:"white",fontFamily:"'Lora',serif",fontSize:18,gap:8}},
     React.createElement('span',null,"◆"),React.createElement('span',null,"Momentum")
   );
@@ -1231,7 +1402,14 @@ function App() {
     ),
     screen==="admin"&&React.createElement('div',{style:overlay},
       React.createElement(AdminPanel,{onClose:()=>setScreen("account")})
-    )
+    ),
+    // Profile nag — shown once per day session when DOB/gender missing
+    showProfileNag&&React.createElement(ProfileNagModal,{user,
+      onSave:u=>{setUser(u);setShowProfileNag(false);},
+      onDismiss:()=>setShowProfileNag(false)
+    }),
+    // Home screen install prompt — shown once per session on mobile browser
+    showHomePrompt&&!showProfileNag&&React.createElement(HomeScreenPrompt,{onDismiss:()=>setShowHomePrompt(false)})
   );
   return null;
 }
