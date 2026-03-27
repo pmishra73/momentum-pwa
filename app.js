@@ -785,6 +785,7 @@ function AdminPanel({onClose}) {
                 u.gender&&React.createElement('div',{style:{fontSize:11,color:"var(--muted)"}},`Gender: ${u.gender}`)
               ),
               React.createElement('div',{style:{fontSize:11,color:"var(--muted)",flexShrink:0}},u.joinedAt||"—")
+            )
           ))
     )
   );
